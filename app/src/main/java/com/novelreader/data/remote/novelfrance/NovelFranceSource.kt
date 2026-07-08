@@ -11,9 +11,11 @@ import okhttp3.Request
 
 /**
  * Implémentation NovelSource pour NovelFrance (https://novelfrance.fr).
- * Source compilée directement dans l'APK pour le MVP.
+ * Utilise l'API REST pour les listes de chapitres (contourne la limite SSR de 50).
+ * Utilise le parsing HTML/JSON uniquement pour le contenu des chapitres.
  *
- * @see NovelSource Interface source améliorée
+ * AMÉLIORATION : getChapterList() utilise /api/chapters/{slug}?skip=N&take=100
+ * avec pagination complète pour charger TOUS les chapitres.
  */
 class NovelFranceSource @JvmOverloads constructor(
     private val httpClient: OkHttpClient,
@@ -46,9 +48,13 @@ class NovelFranceSource @JvmOverloads constructor(
         return api.getNovelDetail(novelSlug)
     }
 
+    /**
+     * Récupère TOUS les chapitres via l'API paginée.
+     * Plus de limite de 50 — l'API renvoie 100 chapitres par page.
+     * Pour 552 chapitres (ORV), ça fait 6 appels API.
+     */
     override suspend fun getChapterList(novelSlug: String): List<ChapterPreview> {
-        val html = fetchHtml("$baseUrl/novel/$novelSlug")
-        return parser.parseChapterList(html).map { it.copy(novelSlug = it.novelSlug.ifBlank { novelSlug }) }
+        return api.getChaptersPaginated(novelSlug)
     }
 
     override suspend fun getChapterContent(chapterUrl: String): ChapterContent {
