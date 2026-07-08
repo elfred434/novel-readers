@@ -54,6 +54,7 @@ import com.novelreader.ui.theme.AppTheme
 fun SettingsScreen(
     onBack: () -> Unit,
     onExtensionsClick: () -> Unit = {},
+    onDownloadsClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
