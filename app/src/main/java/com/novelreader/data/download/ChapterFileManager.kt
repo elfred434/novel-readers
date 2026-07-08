@@ -114,6 +114,19 @@ class ChapterFileManager @Inject constructor(
             ?.map { it.name }
             ?: emptyList()
     }
+
+    /**
+     * Liste les numéros des chapitres téléchargés pour un novel.
+     */
+    fun getDownloadedChapters(novelSlug: String): List<Int> {
+        val dir = File(novelsDir, novelSlug)
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.extension == "json" }
+            ?.mapNotNull { it.nameWithoutExtension.toIntOrNull() }
+            ?.sorted()
+            ?: emptyList()
+    }
 }
 
 @Serializable

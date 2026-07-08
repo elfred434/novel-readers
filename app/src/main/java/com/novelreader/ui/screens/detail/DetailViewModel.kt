@@ -3,18 +3,20 @@ package com.novelreader.ui.screens.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadManager
-import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
 import com.novelreader.data.model.NovelStatus
 import com.novelreader.data.repository.NovelRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class DetailUiState(
@@ -24,6 +26,8 @@ data class DetailUiState(
     val error: String? = null,
     val isInLibrary: Boolean = false,
     val isOffline: Boolean = false,
+    val downloadedChapters: Set<Int> = emptySet(), // numéros de chapitres téléchargés
+    val downloadingChapters: Set<Int> = emptySet(),
     val lastReadChapterNumber: Int? = null
 )
 
@@ -31,29 +35,49 @@ data class DetailUiState(
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: NovelRepository,
-    private val downloadManager: DownloadManager
+    private val downloadManager: DownloadManager,
+    private val chapterFileManager: ChapterFileManager
 ) : ViewModel() {
 
     private val slug: String = savedStateHandle["slug"] ?: ""
-    val downloadQueue = downloadManager.queue
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
-    init { loadNovelDetails() }
+    init {
+        loadNovelDetails()
+        // Observer les téléchargements en cours
+        viewModelScope.launch {
+            downloadManager.queue.collect { items ->
+                val downloading = items.filter { it.novelSlug == slug }
+                    .map { it.chapterNumber }
+                    .toSet()
+                _uiState.update { it.copy(downloadingChapters = downloading) }
+            }
+        }
+    }
 
     fun loadNovelDetails() {
         if (slug.isBlank()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
+            // 1. Toujours charger la liste des téléchargés (hors-ligne d'abord)
+            val downloadedNums = withContext(Dispatchers.IO) {
+                chapterFileManager.getDownloadedChapters(slug).toSet()
+            }
+
             try {
                 // Tentative réseau
                 val novel = repository.getNovelDetails(slug)
                 val chapters = repository.getChapterList(slug)
                 val inLibrary = repository.isNovelInLibrary(slug)
-                _uiState.update { it.copy(novel = novel, chapters = chapters, isLoading = false, isInLibrary = inLibrary, isOffline = false) }
+                _uiState.update { it.copy(
+                    novel = novel, chapters = chapters, isLoading = false,
+                    isInLibrary = inLibrary, isOffline = false,
+                    downloadedChapters = downloadedNums
+                )}
             } catch (e: Exception) {
-                // PAS DE RÉSEAU → charger depuis la base locale
+                // PAS DE RÉSEAU → charger local
                 try {
                     val localNovel = repository.getLocalNovelBySlug(slug)
                     if (localNovel != null) {
@@ -66,18 +90,20 @@ class DetailViewModel @Inject constructor(
                             chapterCount = localNovel.unreadChapterCount, sourceUrl = localNovel.sourceUrl
                         )
                         val previews = localChapters.map { ch ->
-                            ChapterPreview(
-                                id = ch.id, novelSlug = ch.novelSlug,
+                            ChapterPreview(id = ch.id, novelSlug = ch.novelSlug,
                                 chapterNumber = ch.chapterNumber, title = ch.title,
-                                url = ch.url, publishedAt = ch.publishedAt
-                            )
+                                url = ch.url, publishedAt = ch.publishedAt)
                         }
-                        _uiState.update { it.copy(novel = novel, chapters = previews, isLoading = false, isInLibrary = true, isOffline = true) }
+                        _uiState.update { it.copy(novel = novel, chapters = previews,
+                            isLoading = false, isInLibrary = true, isOffline = true,
+                            downloadedChapters = downloadedNums)}
                     } else {
-                        _uiState.update { it.copy(isLoading = false, error = "Novel non trouvé en local. Vérifie ta connexion.") }
+                        _uiState.update { it.copy(isLoading = false, downloadedChapters = downloadedNums,
+                            error = "Novel non trouvé en local. Vérifie ta connexion.")}
                     }
                 } catch (e2: Exception) {
-                    _uiState.update { it.copy(isLoading = false, error = "Impossible de charger le novel. Vérifie ta connexion.") }
+                    _uiState.update { it.copy(isLoading = false, downloadedChapters = downloadedNums,
+                        error = "Impossible de charger le novel. Vérifie ta connexion.")}
                 }
             }
         }
@@ -88,7 +114,8 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             if (_uiState.value.isInLibrary) {
                 repository.removeNovelFromLibrary(slug)
-                _uiState.update { it.copy(isInLibrary = false) }
+                chapterFileManager.deleteNovel(slug)
+                _uiState.update { it.copy(isInLibrary = false, downloadedChapters = emptySet()) }
             } else {
                 repository.addNovelToLibrary(novel)
                 repository.cacheChapters(slug, _uiState.value.chapters, novel.title)

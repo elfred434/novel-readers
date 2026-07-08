@@ -1,6 +1,8 @@
 package com.novelreader.ui.screens.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,8 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.Card
@@ -47,14 +49,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.model.NovelStatus
-import com.novelreader.data.repository.NovelRepository
 import com.novelreader.ui.components.ErrorView
 import com.novelreader.ui.components.LoadingIndicator
 import com.novelreader.ui.components.StatusBadge
+import com.novelreader.ui.theme.Primary
 import com.novelreader.ui.theme.RatingGold
 import com.novelreader.ui.theme.StatusCompleted
+import com.novelreader.ui.theme.SurfaceVariant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,12 +66,19 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val downloadQueue by viewModel.downloadQueue.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.novel?.title ?: "Détail", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(uiState.novel?.title ?: "Détail", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge)
+                        if (uiState.isOffline) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Icons.Default.CloudOff, contentDescription = "Hors-ligne", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, titleContentColor = MaterialTheme.colorScheme.onSurface)
             )
@@ -81,6 +90,8 @@ fun DetailScreen(
             uiState.novel == null -> ErrorView(message = "Novel introuvable", onRetry = viewModel::loadNovelDetails, modifier = Modifier.padding(paddingValues))
             else -> {
                 val novel = uiState.novel!!
+                val downloaded = uiState.downloadedChapters
+                val downloading = uiState.downloadingChapters
 
                 LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                     item(key = "header") {
@@ -89,7 +100,7 @@ fun DetailScreen(
                             status = novel.status, rating = novel.rating, genres = novel.genres,
                             chapterCount = novel.chapterCount, synopsis = novel.synopsis,
                             isInLibrary = uiState.isInLibrary, onToggleLibrary = viewModel::toggleLibrary,
-                            onDownloadAll = viewModel::downloadAllChapters
+                            onDownloadAll = viewModel::downloadAllChapters, dlCount = downloaded.size
                         )
                     }
 
@@ -102,14 +113,14 @@ fun DetailScreen(
                     }
 
                     items(items = uiState.chapters, key = { "${it.novelSlug}_${it.chapterNumber}" }) { chapter ->
-                        val chapterId = NovelRepository.chapterId(chapter.novelSlug, chapter.chapterNumber)
-                        val downloadItem = downloadQueue.find { it.chapterId == chapterId }
-                        val dlStatus = downloadItem?.status
+                        val isDl = chapter.chapterNumber in downloaded
+                        val isDling = chapter.chapterNumber in downloading
 
                         ChapterListItem(
                             chapterNumber = chapter.chapterNumber,
                             title = chapter.title,
-                            downloadStatus = dlStatus,
+                            isDownloaded = isDl,
+                            isDownloading = isDling,
                             onChapterClick = { onChapterClick(chapter.url) },
                             onDownload = { viewModel.downloadChapter(chapter) },
                             onMarkUnread = { viewModel.markChapterAsUnread(chapter) }
@@ -125,7 +136,7 @@ fun DetailScreen(
 private fun HeaderSection(
     coverUrl: String, title: String, author: String, status: NovelStatus, rating: Double,
     genres: List<String>, chapterCount: Int, synopsis: String,
-    isInLibrary: Boolean, onToggleLibrary: () -> Unit, onDownloadAll: () -> Unit
+    isInLibrary: Boolean, onToggleLibrary: () -> Unit, onDownloadAll: () -> Unit, dlCount: Int
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -142,7 +153,7 @@ private fun HeaderSection(
                         }
                     }
                 }
-                Text("$chapterCount chapitres", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("$chapterCount chapitres ($dlCount téléchargés)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     genres.take(3).forEach { GenreChip(it) }
                     if (genres.size > 3) Text("+${genres.size - 3}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
@@ -180,24 +191,24 @@ private fun GenreChip(name: String) {
 
 @Composable
 private fun ChapterListItem(
-    chapterNumber: Int, title: String, downloadStatus: DownloadStatus? = null,
+    chapterNumber: Int, title: String,
+    isDownloaded: Boolean = false, isDownloading: Boolean = false,
     onChapterClick: () -> Unit, onDownload: () -> Unit, onMarkUnread: () -> Unit
 ) {
     Card(
         onClick = onChapterClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = if (isDownloaded) Primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("#$chapterNumber", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(44.dp))
+            Text("#$chapterNumber", style = MaterialTheme.typography.titleMedium, color = if (isDownloaded) Primary else MaterialTheme.colorScheme.primary, modifier = Modifier.width(44.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title.ifBlank { "Chapitre $chapterNumber" }, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            when (downloadStatus) {
-                DownloadStatus.DOWNLOADING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                DownloadStatus.COMPLETED -> Icon(Icons.Default.DownloadDone, contentDescription = "Téléchargé", modifier = Modifier.size(18.dp), tint = StatusCompleted)
-                DownloadStatus.FAILED -> Icon(Icons.Default.Close, contentDescription = "Échec", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            when {
+                isDownloading -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                isDownloaded -> Icon(Icons.Default.DownloadDone, contentDescription = "Téléchargé", modifier = Modifier.size(18.dp), tint = StatusCompleted)
                 else -> {
                     IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Download, contentDescription = "Télécharger", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
