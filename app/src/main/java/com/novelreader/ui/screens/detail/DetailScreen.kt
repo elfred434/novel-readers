@@ -52,11 +52,11 @@ import coil.compose.AsyncImage
 import com.novelreader.data.model.NovelStatus
 import com.novelreader.ui.components.ErrorView
 import com.novelreader.ui.components.LoadingIndicator
-import com.novelreader.ui.components.StatusBadge
+import com.novelreader.ui.components.StyledStatusBadge
 import com.novelreader.ui.theme.Primary
 import com.novelreader.ui.theme.RatingGold
 import com.novelreader.ui.theme.StatusCompleted
-import com.novelreader.ui.theme.SurfaceVariant
+import com.novelreader.ui.theme.SurfaceDarkCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,7 +145,7 @@ private fun HeaderSection(
                 Text(title, style = MaterialTheme.typography.headlineMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Text(author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusBadge(status = status)
+                    StyledStatusBadge(status = status)
                     if (rating > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text("\u2605", style = MaterialTheme.typography.labelLarge, color = RatingGold)

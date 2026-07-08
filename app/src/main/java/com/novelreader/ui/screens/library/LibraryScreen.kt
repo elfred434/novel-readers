@@ -152,7 +152,7 @@ fun LibraryScreen(
                             Spacer(Modifier.height(8.dp))
 
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                item { CategoryChip("Tous", selected = uiState.selectedCategoryId == null) { viewModel.selectCategory(null) } }
+                                item { CategoryChip(name = "Tous", selected = uiState.selectedCategoryId == null, onClick = { viewModel.selectCategory(null) }) }
                                 items(uiState.categories, key = { it.id }) { cat ->
                                     CategoryChip(
                                         name = cat.name,

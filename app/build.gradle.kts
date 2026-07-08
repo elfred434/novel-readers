@@ -15,10 +15,32 @@ android {
         applicationId = "com.novelreader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+
+        // VersionCode auto-incrémenté via GitHub Actions ou nombre de commits Git
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        val commitCount = try {
+            "git rev-list --count HEAD".run { Runtime.getRuntime().exec(this).inputStream.bufferedReader().readLine()?.toIntOrNull() }
+        } catch (_: Exception) { null }
+
+        versionCode = runNumber ?: commitCount ?: 1
+        versionName = "1.0.${versionCode}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Keystore généré automatiquement par GitHub Actions
+            // Pour build local : crée un keystore avec:
+            // keytool -genkey -v -keystore novelreader.keystore -alias novelreader -keyalg RSA -keysize 2048 -validity 10000
+            val keystoreFile = rootProject.file("novelreader.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "novelreader"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "novelreader"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "novelreader"
+            }
+        }
     }
 
     buildTypes {
@@ -28,9 +50,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.findByName("debug")
         }
         debug {
             isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 
@@ -64,18 +89,18 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     debugImplementation(libs.androidx.ui.tooling)
 
-    // Coil (image loading pour les couvertures)
+    // Coil
     implementation(libs.coil.compose)
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Hilt (DI)
+    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room (local DB)
+    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
@@ -84,15 +109,15 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.jsoup)
 
-    // DataStore (préférences persistantes)
+    // DataStore
     implementation(libs.datastore.preferences)
 
-    // WorkManager (mises à jour planifiées)
+    // WorkManager
     implementation(libs.work.runtime.ktx)
     implementation(libs.work.hilt)
     ksp(libs.hilt.work.compiler)
 
-    // JSON parsing
+    // JSON
     implementation(libs.kotlinx.serialization.json)
 
     // Coroutines
