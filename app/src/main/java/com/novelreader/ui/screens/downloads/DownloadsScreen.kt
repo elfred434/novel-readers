@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.novelreader.data.download.DownloadItem
 import com.novelreader.data.download.DownloadStatus
 import com.novelreader.ui.components.EmptyView
 
