@@ -88,7 +88,7 @@ class NovelFranceApi(
             if (page.chapters.isEmpty()) hasMore = false
         }
 
-        allChapters
+        allChapters.reversed()
     }
 
     private suspend fun executeGet(url: String): String = withContext(Dispatchers.IO) {

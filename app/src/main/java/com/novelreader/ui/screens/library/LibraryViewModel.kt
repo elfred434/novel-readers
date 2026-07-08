@@ -8,9 +8,11 @@ import com.novelreader.data.local.entity.ChapterEntity
 import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.data.repository.NovelRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,7 +25,8 @@ data class LibraryUiState(
     val selectedCategoryId: Long? = null,
     val continueReading: ChapterEntity? = null,
     val showNewCategoryDialog: Boolean = false,
-    val newCategoryName: String = ""
+    val newCategoryName: String = "",
+    val deleteCategoryId: Long? = null
 )
 
 enum class ViewMode { GRID, LIST }
@@ -37,9 +40,12 @@ class LibraryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
+    private var novelsFlow: Flow<List<NovelEntity>> = repository.getAllLibraryNovels()
+
     init {
+        // Observe all novels by default
         viewModelScope.launch {
-            repository.getAllLibraryNovels().collect { novels ->
+            novelsFlow.collect { novels ->
                 _uiState.update { it.copy(novels = novels, isLoading = false) }
             }
         }
@@ -65,7 +71,21 @@ class LibraryViewModel @Inject constructor(
 
     // === Catégories ===
 
-    fun selectCategory(categoryId: Long?) { _uiState.update { it.copy(selectedCategoryId = categoryId) } }
+    fun selectCategory(categoryId: Long?) {
+        _uiState.update { it.copy(selectedCategoryId = categoryId) }
+        // Switch the observed flow based on selected category
+        viewModelScope.launch {
+            if (categoryId == null) {
+                novelsFlow = repository.getAllLibraryNovels()
+            } else {
+                novelsFlow = categoryDao.getNovelsInCategory(categoryId)
+            }
+            // Re-collect
+            novelsFlow.collect { novels ->
+                _uiState.update { it.copy(novels = novels, isLoading = false) }
+            }
+        }
+    }
 
     fun showNewCategoryDialog() { _uiState.update { it.copy(showNewCategoryDialog = true, newCategoryName = "") } }
     fun hideNewCategoryDialog() { _uiState.update { it.copy(showNewCategoryDialog = false) } }
@@ -80,13 +100,35 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    fun confirmDeleteCategory() { _uiState.update { it.copy(deleteCategoryId = null) } }
+    fun showDeleteCategory(id: Long) { _uiState.update { it.copy(deleteCategoryId = id) } }
+    fun hideDeleteCategory() { _uiState.update { it.copy(deleteCategoryId = null) } }
+
     fun deleteCategory(id: Long) {
         viewModelScope.launch {
             categoryDao.deleteCategoryById(id)
-            if (_uiState.value.selectedCategoryId == id) _uiState.update { it.copy(selectedCategoryId = null) }
+            if (_uiState.value.selectedCategoryId == id) {
+                _uiState.update { it.copy(selectedCategoryId = null, deleteCategoryId = null) }
+            } else {
+                _uiState.update { it.copy(deleteCategoryId = null) }
+            }
         }
     }
 
-    val hasUnread: (NovelEntity) -> Boolean = { it.unreadChapterCount > 0 }
-    val unreadCount: (NovelEntity) -> Int = { it.unreadChapterCount }
+    fun assignNovelToCategory(novelSlug: String, categoryId: Long) {
+        viewModelScope.launch {
+            categoryDao.addNovelToCategory(
+                com.novelreader.data.local.entity.NovelCategoryCrossRef(
+                    novelSlug = novelSlug,
+                    categoryId = categoryId
+                )
+            )
+        }
+    }
+
+    fun removeNovelFromCategory(novelSlug: String, categoryId: Long) {
+        viewModelScope.launch {
+            categoryDao.removeNovelFromCategory(novelSlug, categoryId)
+        }
+    }
 }

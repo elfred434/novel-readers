@@ -22,6 +22,7 @@ data class SettingsUiState(
     val downloadOnWifiOnly: Boolean = true,
     val cachedChapterCount: Int = 0,
     val clearingCache: Boolean = false,
+    val activeDownloads: Int = 0,
     val failedDownloads: Int = 0,
     val extensionCount: Int = 1
 )
@@ -60,7 +61,12 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             downloadManager.queue.collect { queue ->
-                _uiState.update { it.copy(failedDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.FAILED }) }
+                _uiState.update {
+                    it.copy(
+                        activeDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.DOWNLOADING || q.status == com.novelreader.data.download.DownloadStatus.QUEUED },
+                        failedDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.FAILED }
+                    )
+                }
             }
         }
         viewModelScope.launch {

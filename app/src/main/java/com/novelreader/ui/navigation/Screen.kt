@@ -71,6 +71,11 @@ sealed class Screen(
         title = "Extensions"
     )
 
+    data object Downloads : Screen(
+        route = "downloads",
+        title = "Téléchargements"
+    )
+
     data object Search : Screen(
         route = "search",
         title = "Recherche"

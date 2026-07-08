@@ -25,7 +25,8 @@ data class ReaderUiState(
     val settings: ReaderSettings = ReaderSettings(),
     val showSettings: Boolean = false,
     val scrollPosition: Int = 0,
-    val isMarkedRead: Boolean = false
+    val isMarkedRead: Boolean = false,
+    val isOffline: Boolean = false
 )
 
 @HiltViewModel
@@ -47,16 +48,41 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Charge un chapitre — d'abord depuis le cache si disponible,
+     * puis depuis le réseau si pas de cache ou si erreur réseau.
+     */
     fun loadChapter(chapterUrl: String) {
+        val slug = extractNovelSlug(chapterUrl)
+        val chapterNumber = extractChapterNumber(chapterUrl)
+        val chapterId = NovelRepository.chapterId(slug, chapterNumber)
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(isLoading = true, error = null, currentChapterUrl = chapterUrl, scrollPosition = 0)
             }
+
+            // Étape 1 : essayer le cache local
+            val cached = repository.getCachedChapter(chapterId)
+            if (cached != null) {
+                _uiState.update {
+                    it.copy(
+                        chapterContent = cached,
+                        isLoading = false,
+                        novelSlug = slug,
+                        chapterNumber = chapterNumber,
+                        hasPrevChapter = cached.prevChapterUrl != null,
+                        hasNextChapter = cached.nextChapterUrl != null,
+                        isOffline = true
+                    )
+                }
+                markAsRead(slug, chapterNumber)
+                return@launch
+            }
+
+            // Étape 2 : pas de cache, charger depuis le réseau
             try {
                 val content = repository.getChapterContent(chapterUrl)
-                val slug = extractNovelSlug(chapterUrl)
-                val chapterNumber = extractChapterNumber(chapterUrl)
-
                 _uiState.update {
                     it.copy(
                         chapterContent = content,
@@ -64,20 +90,25 @@ class ReaderViewModel @Inject constructor(
                         novelSlug = slug,
                         chapterNumber = chapterNumber,
                         hasPrevChapter = content.prevChapterUrl != null,
-                        hasNextChapter = content.nextChapterUrl != null
+                        hasNextChapter = content.nextChapterUrl != null,
+                        isOffline = false
                     )
                 }
-
-                val chapterId = NovelRepository.chapterId(slug, chapterNumber)
-                repository.markChapterAsRead(chapterId)
-                _uiState.update { it.copy(isMarkedRead = true) }
-
+                markAsRead(slug, chapterNumber)
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = e.message ?: "Impossible de charger le chapitre")
+                    it.copy(isLoading = false, error = e.message ?: "Impossible de charger le chapitre. Vérifie ta connexion.")
                 }
             }
         }
+    }
+
+    private suspend fun markAsRead(slug: String, chapterNumber: Int) {
+        try {
+            val chapterId = NovelRepository.chapterId(slug, chapterNumber)
+            repository.markChapterAsRead(chapterId)
+            _uiState.update { it.copy(isMarkedRead = true) }
+        } catch (_: Exception) {}
     }
 
     fun goToNextChapter() {
