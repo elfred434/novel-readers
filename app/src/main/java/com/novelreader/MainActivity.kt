@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.ui.navigation.NovelReaderNavigation
+import com.novelreader.ui.theme.AppTheme
 import com.novelreader.ui.theme.NovelReaderTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -27,9 +28,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val isDark by preferencesManager.isDarkTheme.collectAsState(initial = true)
+            val themeValue by preferencesManager.themeType.collectAsState(initial = 0)
+            val appTheme = when (themeValue) {
+                0 -> AppTheme.SYSTEM
+                1 -> AppTheme.DARK
+                2 -> AppTheme.LIGHT
+                3 -> AppTheme.AMOLED
+                else -> AppTheme.DARK
+            }
 
-            NovelReaderTheme(darkTheme = isDark) {
+            NovelReaderTheme(themeType = appTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

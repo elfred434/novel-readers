@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.novelreader.ui.screens.browse.BrowseScreen
 import com.novelreader.ui.screens.detail.DetailScreen
+import com.novelreader.ui.screens.extensions.ExtensionsScreen
 import com.novelreader.ui.screens.history.HistoryScreen
 import com.novelreader.ui.screens.library.LibraryScreen
 import com.novelreader.ui.screens.reader.ReaderScreen
@@ -111,7 +112,13 @@ fun NovelReaderNavigation() {
                 ReaderScreen(onBack = { navController.popBackStack() })
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(onBack = { navController.popBackStack() })
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onExtensionsClick = { navController.navigate(Screen.Extensions.route) }
+                )
+            }
+            composable(Screen.Extensions.route) {
+                ExtensionsScreen(onBack = { navController.popBackStack() })
             }
         }
     }

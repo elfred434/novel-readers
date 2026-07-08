@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,12 +47,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.novelreader.data.model.ChapterPreview
+import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.model.NovelStatus
+import com.novelreader.data.repository.NovelRepository
 import com.novelreader.ui.components.ErrorView
 import com.novelreader.ui.components.LoadingIndicator
 import com.novelreader.ui.components.StatusBadge
 import com.novelreader.ui.theme.RatingGold
+import com.novelreader.ui.theme.StatusCompleted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +64,7 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val downloadQueue by viewModel.downloadQueue.collectAsState()
 
     Scaffold(
         topBar = {
@@ -84,7 +88,8 @@ fun DetailScreen(
                             coverUrl = novel.coverImageUrl, title = novel.title, author = novel.author,
                             status = novel.status, rating = novel.rating, genres = novel.genres,
                             chapterCount = novel.chapterCount, synopsis = novel.synopsis,
-                            isInLibrary = uiState.isInLibrary, onToggleLibrary = viewModel::toggleLibrary
+                            isInLibrary = uiState.isInLibrary, onToggleLibrary = viewModel::toggleLibrary,
+                            onDownloadAll = viewModel::downloadAllChapters
                         )
                     }
 
@@ -97,10 +102,14 @@ fun DetailScreen(
                     }
 
                     items(items = uiState.chapters, key = { "${it.novelSlug}_${it.chapterNumber}" }) { chapter ->
+                        val chapterId = NovelRepository.chapterId(chapter.novelSlug, chapter.chapterNumber)
+                        val downloadItem = downloadQueue.find { it.chapterId == chapterId }
+                        val dlStatus = downloadItem?.status
+
                         ChapterListItem(
                             chapterNumber = chapter.chapterNumber,
                             title = chapter.title,
-                            isDownloading = "${chapter.novelSlug}_${chapter.chapterNumber}" in uiState.downloadingChapters,
+                            downloadStatus = dlStatus,
                             onChapterClick = { onChapterClick(chapter.url) },
                             onDownload = { viewModel.downloadChapter(chapter) },
                             onMarkUnread = { viewModel.markChapterAsUnread(chapter) }
@@ -116,7 +125,7 @@ fun DetailScreen(
 private fun HeaderSection(
     coverUrl: String, title: String, author: String, status: NovelStatus, rating: Double,
     genres: List<String>, chapterCount: Int, synopsis: String,
-    isInLibrary: Boolean, onToggleLibrary: () -> Unit
+    isInLibrary: Boolean, onToggleLibrary: () -> Unit, onDownloadAll: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -128,7 +137,7 @@ private fun HeaderSection(
                     StatusBadge(status = status)
                     if (rating > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("★", style = MaterialTheme.typography.labelLarge, color = RatingGold)
+                            Text("\u2605", style = MaterialTheme.typography.labelLarge, color = RatingGold)
                             Text("%.1f".format(rating), style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -139,13 +148,17 @@ private fun HeaderSection(
                     if (genres.size > 3) Text("+${genres.size - 3}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
-                FilledTonalButton(
-                    onClick = onToggleLibrary,
-                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = if (isInLibrary) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Icon(if (isInLibrary) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isInLibrary) "Suivi" else "Suivre", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = onToggleLibrary, colors = ButtonDefaults.filledTonalButtonColors(containerColor = if (isInLibrary) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer)) {
+                        Icon(if (isInLibrary) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isInLibrary) "Suivi" else "Suivre", style = MaterialTheme.typography.labelLarge)
+                    }
+                    FilledTonalButton(onClick = onDownloadAll, colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f))) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Tout DL", style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             }
         }
@@ -167,7 +180,7 @@ private fun GenreChip(name: String) {
 
 @Composable
 private fun ChapterListItem(
-    chapterNumber: Int, title: String, isDownloading: Boolean = false,
+    chapterNumber: Int, title: String, downloadStatus: DownloadStatus? = null,
     onChapterClick: () -> Unit, onDownload: () -> Unit, onMarkUnread: () -> Unit
 ) {
     Card(
@@ -181,15 +194,16 @@ private fun ChapterListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(title.ifBlank { "Chapitre $chapterNumber" }, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            // Bouton téléchargement
-            if (isDownloading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Download, contentDescription = "Télécharger", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            when (downloadStatus) {
+                DownloadStatus.DOWNLOADING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                DownloadStatus.COMPLETED -> Icon(Icons.Default.DownloadDone, contentDescription = "Téléchargé", modifier = Modifier.size(18.dp), tint = StatusCompleted)
+                DownloadStatus.FAILED -> Icon(Icons.Default.Close, contentDescription = "Échec", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                else -> {
+                    IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Download, contentDescription = "Télécharger", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
-            // Marquer non-lu
             IconButton(onClick = onMarkUnread, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Marquer non lu", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }

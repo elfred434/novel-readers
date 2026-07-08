@@ -3,6 +3,7 @@ package com.novelreader.ui.screens.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
 import com.novelreader.data.repository.NovelRepository
@@ -20,17 +21,20 @@ data class DetailUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val isInLibrary: Boolean = false,
-    val downloadingChapters: Set<String> = emptySet(),
     val lastReadChapterNumber: Int? = null
 )
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val repository: NovelRepository
+    private val repository: NovelRepository,
+    private val downloadManager: DownloadManager
 ) : ViewModel() {
 
     private val slug: String = savedStateHandle["slug"] ?: ""
+
+    /** Observed by DetailScreen to show download status per chapter */
+    val downloadQueue = downloadManager.queue
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
@@ -66,23 +70,32 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** Download single chapter via the queue manager */
     fun downloadChapter(chapter: ChapterPreview) {
-        viewModelScope.launch {
-            val key = "${slug}_${chapter.chapterNumber}"
-            _uiState.update { it.copy(downloadingChapters = it.downloadingChapters + key) }
-            try {
-                val content = repository.getChapterContent(chapter.url)
-                val chapterId = NovelRepository.chapterId(slug, chapter.chapterNumber)
-                repository.downloadChapter(chapterId, content)
-            } catch (_: Exception) { }
-            _uiState.update { it.copy(downloadingChapters = it.downloadingChapters - key) }
+        val novel = _uiState.value.novel ?: return
+        downloadManager.enqueue(
+            chapterId = NovelRepository.chapterId(slug, chapter.chapterNumber),
+            novelSlug = slug, chapterNumber = chapter.chapterNumber, url = chapter.url,
+            novelTitle = novel.title, chapterTitle = chapter.title
+        )
+    }
+
+    /** Enqueue all chapters for download */
+    fun downloadAllChapters() {
+        val novel = _uiState.value.novel ?: return
+        val items = _uiState.value.chapters.map { ch ->
+            com.novelreader.data.download.DownloadItem(
+                chapterId = NovelRepository.chapterId(slug, ch.chapterNumber),
+                novelSlug = slug, chapterNumber = ch.chapterNumber, url = ch.url,
+                novelTitle = novel.title, chapterTitle = ch.title
+            )
         }
+        downloadManager.enqueueAll(items)
     }
 
     fun markChapterAsUnread(chapter: ChapterPreview) {
         viewModelScope.launch {
-            val chapterId = NovelRepository.chapterId(slug, chapter.chapterNumber)
-            repository.markChapterAsUnread(chapterId)
+            repository.markChapterAsUnread(NovelRepository.chapterId(slug, chapter.chapterNumber))
         }
     }
 }

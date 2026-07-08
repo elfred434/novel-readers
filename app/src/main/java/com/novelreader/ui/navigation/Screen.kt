@@ -66,6 +66,11 @@ sealed class Screen(
         title = "Paramètres"
     )
 
+    data object Extensions : Screen(
+        route = "extensions",
+        title = "Extensions"
+    )
+
     data object Search : Screen(
         route = "search",
         title = "Recherche"

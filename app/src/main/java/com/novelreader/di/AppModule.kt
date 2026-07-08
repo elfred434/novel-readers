@@ -2,6 +2,8 @@ package com.novelreader.di
 
 import android.content.Context
 import androidx.room.Room
+import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.AppDatabase
 import com.novelreader.data.local.dao.CategoryDao
 import com.novelreader.data.local.dao.ChapterContentDao
@@ -12,6 +14,7 @@ import com.novelreader.data.remote.novelfrance.NovelFranceApi
 import com.novelreader.data.remote.novelfrance.NovelFranceParser
 import com.novelreader.data.remote.novelfrance.NovelFranceSource
 import com.novelreader.data.remote.source.NovelSource
+import com.novelreader.data.repository.NovelRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,26 +24,12 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
-/**
- * Module Hilt principal.
- * Fournit les dépendances singleton de l'application.
- *
- * Correction de l'audit :
- * - OkHttpClient est configuré avec timeouts et User-Agent
- * - NovelFranceSource reçoit l'Api et le Parser injectés, pas créés par défaut
- * - NovelFranceApi reçoit le même client configuré
- * - Le Repository dépend de l'interface NovelSource (pas de la classe concrète)
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
     // ===================== Networking =====================
 
-    /**
-     * OkHttpClient partagé, configuré avec timeouts longs (15s) et User-Agent
-     * pour les appels vers novelfrance.fr et le parsing HTML.
-     */
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
@@ -59,44 +48,36 @@ object AppModule {
             .build()
     }
 
-    /**
-     * NovelFranceApi : client pour l'API REST JSON
-     * Reçoit l'OkHttpClient déjà configuré.
-     */
     @Provides
     @Singleton
-    fun provideNovelFranceApi(client: OkHttpClient): NovelFranceApi {
-        return NovelFranceApi(client)
-    }
+    fun provideNovelFranceApi(client: OkHttpClient): NovelFranceApi = NovelFranceApi(client)
 
-    /**
-     * NovelFranceParser : parseur HTML/JSON pour les données embarquées
-     * Stateless, peut être singleton.
-     */
     @Provides
     @Singleton
-    fun provideNovelFranceParser(): NovelFranceParser {
-        return NovelFranceParser()
-    }
+    fun provideNovelFranceParser(): NovelFranceParser = NovelFranceParser()
 
-    /**
-     * NovelFranceSource : implémentation concrète de NovelSource.
-     * Reçoit toutes ses dépendances par injection (pas de valeurs par défaut).
-     * Fournie en tant que NovelSource (interface) pour que le Repository
-     * dépende de l'abstraction, pas de l'implémentation.
-     */
     @Provides
     @Singleton
     fun provideNovelFranceSource(
-        client: OkHttpClient,
-        api: NovelFranceApi,
-        parser: NovelFranceParser
+        client: OkHttpClient, api: NovelFranceApi, parser: NovelFranceParser
     ): NovelSource {
-        return NovelFranceSource(
-            httpClient = client,
-            api = api,
-            parser = parser
-        )
+        return NovelFranceSource(httpClient = client, api = api, parser = parser)
+    }
+
+    // ===================== Extensions =====================
+
+    @Provides
+    @Singleton
+    fun provideExtensionManager(novelFranceSource: NovelSource): ExtensionManager {
+        return ExtensionManager().apply { registerSource(novelFranceSource) }
+    }
+
+    // ===================== Download Manager =====================
+
+    @Provides
+    @Singleton
+    fun provideDownloadManager(repository: NovelRepository): DownloadManager {
+        return DownloadManager(repository)
     }
 
     // ===================== Base de données Room =====================
@@ -104,38 +85,25 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            AppDatabase.DATABASE_NAME
-        )
-            .fallbackToDestructiveMigration()
-            .build()
+        return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .fallbackToDestructiveMigration().build()
     }
 
     @Provides
     @Singleton
-    fun provideNovelDao(database: AppDatabase): NovelDao {
-        return database.novelDao()
-    }
+    fun provideNovelDao(database: AppDatabase): NovelDao = database.novelDao()
 
     @Provides
     @Singleton
-    fun provideChapterDao(database: AppDatabase): ChapterDao {
-        return database.chapterDao()
-    }
+    fun provideChapterDao(database: AppDatabase): ChapterDao = database.chapterDao()
 
     @Provides
     @Singleton
-    fun provideChapterContentDao(database: AppDatabase): ChapterContentDao {
-        return database.chapterContentDao()
-    }
+    fun provideChapterContentDao(database: AppDatabase): ChapterContentDao = database.chapterContentDao()
 
     @Provides
     @Singleton
-    fun provideCategoryDao(database: AppDatabase): CategoryDao {
-        return database.categoryDao()
-    }
+    fun provideCategoryDao(database: AppDatabase): CategoryDao = database.categoryDao()
 
     // ===================== Préférences =====================
 

@@ -5,53 +5,61 @@ import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
 
 /**
- * Interface "Source" pour l'extensibilité future.
- * Chaque source de novels (NovelFrance, bientôt d'autres) implémentera cette interface.
+ * Interface Source — version améliorée inspirée de Mihon.
  *
- * Inspiré du pattern utilisé par Mihon/Tachiyomi.
- * Pour le MVP, seule NovelFranceSource l'implémente.
+ * Chaque source de novels implémente cette interface.
+ * Les sources peuvent être chargées dynamiquement (ExtensionManager)
+ * ou compilées directement dans l'APK (comme NovelFranceSource pour le MVP).
  */
 interface NovelSource {
 
-    /** Nom lisible de la source (ex: "NovelFrance") */
+    /** Identifiant unique de la source */
+    val id: Long
+
+    /** Nom lisible (ex: "NovelFrance") */
     val name: String
 
-    /** URL de base de la source (ex: "https://novelfrance.fr") */
+    /** URL de base (ex: "https://novelfrance.fr") */
     val baseUrl: String
 
-    /**
-     * Récupère les derniers chapitres sortis (flux "mises à jour").
-     * Correspond à la page /latest du site.
-     */
+    /** Code langue ISO (ex: "fr", "en", "all") */
+    val lang: String
+
+    /** URL d'une icône représentative (optionnelle) */
+    val iconUrl: String?
+
+    /** Version du code source (pour mises à jour) */
+    val version: Int
+
+    /** Supporte le flux "derniers chapitres" (/latest) */
+    val supportsLatest: Boolean
+
+    /** Récupère les derniers chapitres publiés */
     suspend fun getLatestUpdates(page: Int): List<ChapterPreview>
 
-    /**
-     * Recherche des novels par titre.
-     * Correspond à la page /browse?search=... ou l'API /api/novels?search=...
-     */
+    /** Recherche des novels par titre */
     suspend fun search(query: String, page: Int): List<Novel>
 
-    /**
-     * Parcourir les novels (page paginée).
-     * Correspond à /api/novels?page=N&limit=20
-     */
+    /** Parcourir le catalogue paginé */
     suspend fun getBrowseList(page: Int, genre: String? = null, status: String? = null): List<Novel>
 
-    /**
-     * Récupère les détails complets d'un novel.
-     * Correspond à /api/novels/{slug}
-     */
+    /** Détails complets d'un novel */
     suspend fun getNovelDetails(novelSlug: String): Novel
 
-    /**
-     * Récupère la liste des chapitres d'un novel.
-     * Les données sont extraites de la page HTML /novel/{slug}
-     */
+    /** Liste des chapitres d'un novel */
     suspend fun getChapterList(novelSlug: String): List<ChapterPreview>
 
-    /**
-     * Récupère le contenu texte d'un chapitre.
-     * Les données sont extraites de la page HTML /novel/{slug}/chapter-{n}
-     */
+    /** Contenu texte d'un chapitre */
     suspend fun getChapterContent(chapterUrl: String): ChapterContent
+
+    /** Convertit cette source en métadonnées pour l'affichage */
+    fun toExtensionInfo() = com.novelreader.data.extension.ExtensionInfo(
+        id = id,
+        name = name,
+        baseUrl = baseUrl,
+        lang = lang,
+        iconUrl = iconUrl,
+        version = version,
+        supportsLatest = supportsLatest
+    )
 }
