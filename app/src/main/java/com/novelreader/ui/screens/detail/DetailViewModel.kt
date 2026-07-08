@@ -4,8 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
+import com.novelreader.data.model.NovelStatus
 import com.novelreader.data.repository.NovelRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,7 @@ data class DetailUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val isInLibrary: Boolean = false,
+    val isOffline: Boolean = false,
     val lastReadChapterNumber: Int? = null
 )
 
@@ -32,8 +35,6 @@ class DetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val slug: String = savedStateHandle["slug"] ?: ""
-
-    /** Observed by DetailScreen to show download status per chapter */
     val downloadQueue = downloadManager.queue
 
     private val _uiState = MutableStateFlow(DetailUiState())
@@ -46,12 +47,38 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
+                // Tentative réseau
                 val novel = repository.getNovelDetails(slug)
                 val chapters = repository.getChapterList(slug)
                 val inLibrary = repository.isNovelInLibrary(slug)
-                _uiState.update { it.copy(novel = novel, chapters = chapters, isLoading = false, isInLibrary = inLibrary) }
+                _uiState.update { it.copy(novel = novel, chapters = chapters, isLoading = false, isInLibrary = inLibrary, isOffline = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Erreur") }
+                // PAS DE RÉSEAU → charger depuis la base locale
+                try {
+                    val localNovel = repository.getLocalNovelBySlug(slug)
+                    if (localNovel != null) {
+                        val localChapters = repository.getChaptersFromDb(slug)
+                        val novel = Novel(
+                            id = "", slug = localNovel.slug, title = localNovel.title,
+                            author = localNovel.author, coverImageUrl = localNovel.coverImageUrl,
+                            synopsis = localNovel.synopsis, status = NovelStatus.fromString(localNovel.status),
+                            rating = localNovel.rating, genres = localNovel.genres,
+                            chapterCount = localNovel.unreadChapterCount, sourceUrl = localNovel.sourceUrl
+                        )
+                        val previews = localChapters.map { ch ->
+                            ChapterPreview(
+                                id = ch.id, novelSlug = ch.novelSlug,
+                                chapterNumber = ch.chapterNumber, title = ch.title,
+                                url = ch.url, publishedAt = ch.publishedAt
+                            )
+                        }
+                        _uiState.update { it.copy(novel = novel, chapters = previews, isLoading = false, isInLibrary = true, isOffline = true) }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false, error = "Novel non trouvé en local. Vérifie ta connexion.") }
+                    }
+                } catch (e2: Exception) {
+                    _uiState.update { it.copy(isLoading = false, error = "Impossible de charger le novel. Vérifie ta connexion.") }
+                }
             }
         }
     }
@@ -70,7 +97,6 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** Download single chapter via the queue manager */
     fun downloadChapter(chapter: ChapterPreview) {
         val novel = _uiState.value.novel ?: return
         downloadManager.enqueue(
@@ -80,7 +106,6 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    /** Enqueue all chapters for download */
     fun downloadAllChapters() {
         val novel = _uiState.value.novel ?: return
         val items = _uiState.value.chapters.map { ch ->

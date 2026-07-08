@@ -103,6 +103,16 @@ class NovelRepository @Inject constructor(
         return novelDao.getNovelBySlug(slug) != null
     }
 
+    /** Récupère un novel depuis la base locale (hors-ligne). */
+    suspend fun getLocalNovelBySlug(slug: String): NovelEntity? {
+        return novelDao.getNovelBySlug(slug)
+    }
+
+    /** Récupère les chapitres d'un novel depuis la base locale. */
+    suspend fun getChaptersFromDb(slug: String): List<ChapterEntity> {
+        return chapterDao.getChaptersForNovelOnce(slug)
+    }
+
     // ===================== Chapitres locaux =====================
 
     /** Récupère les chapitres d'un novel depuis le cache local (Flow réactif). */

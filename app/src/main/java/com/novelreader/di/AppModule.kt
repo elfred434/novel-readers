@@ -2,6 +2,7 @@ package com.novelreader.di
 
 import android.content.Context
 import androidx.room.Room
+import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.AppDatabase
@@ -76,8 +77,17 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDownloadManager(repository: NovelRepository): DownloadManager {
-        return DownloadManager(repository)
+    fun provideChapterFileManager(@ApplicationContext context: Context): ChapterFileManager {
+        return ChapterFileManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDownloadManager(
+        repository: NovelRepository,
+        chapterFileManager: ChapterFileManager
+    ): DownloadManager {
+        return DownloadManager(repository, chapterFileManager)
     }
 
     // ===================== Base de données Room =====================
