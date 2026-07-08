@@ -32,6 +32,8 @@ import com.novelreader.ui.screens.library.LibraryScreen
 import com.novelreader.ui.screens.reader.ReaderScreen
 import com.novelreader.ui.screens.settings.SettingsScreen
 import com.novelreader.ui.screens.updates.UpdatesScreen
+import com.novelreader.ui.theme.*
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun NovelReaderNavigation() {
@@ -46,14 +48,15 @@ fun NovelReaderNavigation() {
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
+                    containerColor = SurfaceDarkElevated,
+                    tonalElevation = 0.dp,
+                    contentColor = OnSurfaceDark
                 ) {
                     Screen.bottomNavItems.forEach { screen ->
                         val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                         NavigationBarItem(
-                            icon = { screen.icon?.let { Icon(it, contentDescription = screen.title) } },
-                            label = { Text(screen.title, style = MaterialTheme.typography.labelSmall) },
+                            icon = { screen.icon?.let { Icon(it, contentDescription = screen.title, tint = if (selected) Primary else OnSurfaceDarkSecondary) } },
+                            label = { Text(screen.title, style = MaterialTheme.typography.labelSmall, color = if (selected) Primary else OnSurfaceDarkSecondary) },
                             selected = selected,
                             onClick = {
                                 navController.navigate(screen.route) {
@@ -63,24 +66,21 @@ fun NovelReaderNavigation() {
                                 }
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                indicatorColor = Primary.copy(alpha = 0.15f)
                             )
                         )
                     }
                 }
             }
-        }
+        },
+        containerColor = SurfaceDark
     ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = Screen.Library.route,
             modifier = Modifier.padding(innerPadding),
-            enterTransition = { fadeIn(animationSpec = tween(200)) },
-            exitTransition = { fadeOut(animationSpec = tween(200)) }
+            enterTransition = { fadeIn(animationSpec = tween(250)) },
+            exitTransition = { fadeOut(animationSpec = tween(250)) }
         ) {
             composable(Screen.Library.route) {
                 LibraryScreen(
@@ -97,34 +97,17 @@ fun NovelReaderNavigation() {
             composable(Screen.History.route) {
                 HistoryScreen(onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) })
             }
-            composable(
-                route = Screen.Detail.route,
-                arguments = listOf(navArgument("slug") { type = NavType.StringType })
-            ) {
-                DetailScreen(
-                    onBack = { navController.popBackStack() },
-                    onChapterClick = { chapterUrl -> navController.navigate(Screen.Reader.createRoute(chapterUrl)) }
-                )
+            composable(Screen.Detail.route, arguments = listOf(navArgument("slug") { type = NavType.StringType })) {
+                DetailScreen(onBack = { navController.popBackStack() }, onChapterClick = { chapterUrl -> navController.navigate(Screen.Reader.createRoute(chapterUrl)) })
             }
-            composable(
-                route = Screen.Reader.route,
-                arguments = listOf(navArgument("chapterUrlEncoded") { type = NavType.StringType })
-            ) {
+            composable(Screen.Reader.route, arguments = listOf(navArgument("chapterUrlEncoded") { type = NavType.StringType })) {
                 ReaderScreen(onBack = { navController.popBackStack() })
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onExtensionsClick = { navController.navigate(Screen.Extensions.route) },
-                    onDownloadsClick = { navController.navigate(Screen.Downloads.route) }
-                )
+                SettingsScreen(onBack = { navController.popBackStack() }, onExtensionsClick = { navController.navigate(Screen.Extensions.route) }, onDownloadsClick = { navController.navigate(Screen.Downloads.route) })
             }
-            composable(Screen.Extensions.route) {
-                ExtensionsScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Screen.Downloads.route) {
-                DownloadsScreen(onBack = { navController.popBackStack() })
-            }
+            composable(Screen.Extensions.route) { ExtensionsScreen(onBack = { navController.popBackStack() }) }
+            composable(Screen.Downloads.route) { DownloadsScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

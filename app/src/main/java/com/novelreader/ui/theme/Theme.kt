@@ -11,30 +11,60 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Primary, onPrimary = OnPrimary, primaryContainer = PrimaryVariant,
-    secondary = Secondary, tertiary = Tertiary,
-    background = Surface, surface = Surface, surfaceVariant = SurfaceVariant,
-    onBackground = OnSurface, onSurface = OnSurface, onSurfaceVariant = OnSurfaceVariant,
-    outline = Outline, error = Error
+private val DarkScheme = darkColorScheme(
+    primary = Primary,
+    onPrimary = OnPrimary,
+    primaryContainer = PrimaryContainer,
+    secondary = Secondary,
+    onSecondary = OnSecondary,
+    secondaryContainer = SecondaryContainer,
+    tertiary = Tertiary,
+    tertiaryContainer = TertiaryContainer,
+    error = Error,
+    errorContainer = ErrorContainer,
+    background = SurfaceDark,
+    onBackground = OnSurfaceDark,
+    surface = SurfaceDarkElevated,
+    onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceDarkCard,
+    onSurfaceVariant = OnSurfaceDarkSecondary,
+    outline = OutlineDark,
+    outlineVariant = OutlineDarkVariant
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Primary, onPrimary = OnPrimary, primaryContainer = PrimaryVariant,
-    secondary = Secondary, tertiary = Tertiary,
-    background = LightSurface, surface = LightSurface, surfaceVariant = LightSurfaceVariant,
-    onBackground = LightOnSurface, onSurface = LightOnSurface, onSurfaceVariant = LightOnSurfaceVariant,
-    outline = LightOutline, error = Error
+private val LightScheme = lightColorScheme(
+    primary = Primary,
+    onPrimary = OnPrimary,
+    primaryContainer = Color(0xFFFFE5E5),
+    secondary = SecondaryVariant,
+    onSecondary = OnSecondary,
+    tertiary = TertiaryVariant,
+    error = Error,
+    background = SurfaceLight,
+    onBackground = OnSurfaceLight,
+    surface = SurfaceLightElevated,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceLightCard,
+    onSurfaceVariant = OnSurfaceLightSecondary,
+    outline = OutlineLight
 )
 
-private val AmoledColorScheme = darkColorScheme(
-    primary = Primary, onPrimary = OnPrimary, primaryContainer = PrimaryVariant,
-    secondary = Secondary, tertiary = Tertiary,
-    background = AmoledBackground, surface = AmoledSurface, surfaceVariant = AmoledSurfaceVariant,
-    onBackground = AmoledOnSurface, onSurface = AmoledOnSurface, onSurfaceVariant = AmoledOnSurfaceVariant,
-    outline = Color(0xFF1E1E20),
-    error = Error
+private val AmoledScheme = darkColorScheme(
+    primary = Primary,
+    onPrimary = OnPrimary,
+    primaryContainer = PrimaryContainer,
+    secondary = Secondary,
+    tertiary = Tertiary,
+    error = Error,
+    background = AmoledBackground,
+    onBackground = AmoledOnSurface,
+    surface = AmoledSurface,
+    onSurface = AmoledOnSurface,
+    surfaceVariant = AmoledSurfaceVariant,
+    onSurfaceVariant = AmoledOnSurfaceVariant,
+    outline = AmoledOutline
 )
 
 @Composable
@@ -50,9 +80,9 @@ fun NovelReaderTheme(
     }
 
     val colorScheme = when (themeType) {
-        AppTheme.AMOLED -> AmoledColorScheme
-        AppTheme.LIGHT -> LightColorScheme
-        else -> if (isDark) DarkColorScheme else LightColorScheme
+        AppTheme.AMOLED -> AmoledScheme
+        AppTheme.LIGHT -> LightScheme
+        else -> if (isDark) DarkScheme else LightScheme
     }
 
     val view = LocalView.current
@@ -60,9 +90,16 @@ fun NovelReaderTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !isDark
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
-    MaterialTheme(colorScheme = colorScheme, typography = NovelReaderTypography, content = content)
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = NovelReaderTypography,
+        shapes = NovelReaderShapes,
+        content = content
+    )
 }

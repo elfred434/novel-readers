@@ -1,7 +1,9 @@
 package com.novelreader.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,15 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Schedule
@@ -45,9 +47,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.novelreader.ui.theme.AppTheme
+import com.novelreader.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,147 +68,154 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Paramètres", style = MaterialTheme.typography.headlineMedium) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, titleContentColor = MaterialTheme.colorScheme.onSurface)
+                title = { Text("Paramètres", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour", tint = OnSurfaceDark) } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = OnSurfaceDark)
             )
-        }
+        },
+        containerColor = SurfaceDark
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // === Thème ===
+            // === CARTE THÈME ===
             SettingsCard {
                 Column {
                     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Icons.Default.Palette, null, tint = Primary, modifier = Modifier.size(22.dp))
                             Column {
-                                Text("Thème", style = MaterialTheme.typography.titleMedium)
-                                val themeNames = AppTheme.entries.map { it.displayName }
-                                Text(themeNames.getOrElse(uiState.themeType) { "Système" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Thème", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text(AppTheme.entries.getOrElse(uiState.themeType) { AppTheme.DARK }.displayName, style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary)
                             }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        AppTheme.entries.forEachIndexed { index, theme ->
-                            val selected = uiState.themeType == index
-                            Button(
-                                onClick = { viewModel.setThemeType(index) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                ),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                            ) {
-                                Text(theme.displayName, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // === Extensions ===
-            SettingsCard {
-                Row(Modifier.fillMaxWidth().clickable { onExtensionsClick() }, Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        Column {
-                            Text("Extensions", style = MaterialTheme.typography.titleMedium)
-                            Text("${uiState.extensionCount} source${if (uiState.extensionCount > 1) "s" else ""} installée${if (uiState.extensionCount > 1) "s" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-
-            // === Vérification auto ===
-            SettingsCard {
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        Column { Text("Vérification auto", style = MaterialTheme.typography.titleMedium); Text("Toutes les ${uiState.updateIntervalHours}h", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Slider(
-                    value = uiState.updateIntervalHours.toFloat(), onValueChange = { viewModel.setUpdateInterval(it.toInt()) },
-                    valueRange = 4f..48f, steps = 10,
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                )
-                Text("${uiState.updateIntervalHours}h", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.End))
-            }
-
-            // === Notifications ===
-            SettingsCard {
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        Column { Text("Notifications", style = MaterialTheme.typography.titleMedium); Text("Alerte nouveaux chapitres", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                    Switch(checked = uiState.notificationsEnabled, onCheckedChange = { viewModel.toggleNotifications() }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary))
-                }
-            }
-
-            // === Téléchargements ===
-            SettingsCard {
-                Column {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        Text("Téléchargements", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Text("Téléchargement simultané", style = MaterialTheme.typography.bodySmall)
-                        Text("${uiState.downloadMaxConcurrent}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Slider(
-                        value = uiState.downloadMaxConcurrent.toFloat(), onValueChange = { viewModel.setDownloadMaxConcurrent(it.toInt()) },
-                        valueRange = 1f..5f, steps = 3,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Wi-Fi uniquement", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Switch(checked = uiState.downloadOnWifiOnly, onCheckedChange = { viewModel.setDownloadOnWifiOnly(it) }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary))
-                    }
-                    if (uiState.failedDownloads > 0) {
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = viewModel::retryFailedDownloads, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                            Text("Réessayer ${uiState.failedDownloads} échec(s)")
-                        }
-                    }
-                }
-            }
-
-            // === Cache ===
-            SettingsCard {
-                Column {
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                            Column { Text("Cache", style = MaterialTheme.typography.titleMedium); Text("${uiState.cachedChapterCount} chapitres en cache", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = viewModel::clearCache,
-                        enabled = uiState.cachedChapterCount > 0 && !uiState.clearingCache,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        AppTheme.entries.forEachIndexed { index, theme ->
+                            val selected = uiState.themeType == index
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (selected) Brush.horizontalGradient(listOf(Primary, PrimaryVariant)) else SurfaceDarkElevated)
+                                    .clickable { viewModel.setThemeType(index) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    theme.displayName,
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selected) Color.White else OnSurfaceDarkSecondary
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // === FILE D'ATTENTE ===
+            SettingsCard {
+                Row(Modifier.fillMaxWidth().clickable { onDownloadsClick() }, Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Download, null, tint = Primary, modifier = Modifier.size(22.dp))
+                        Column {
+                            Text("File d'attente", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            val parts = mutableListOf<String>()
+                            if (uiState.activeDownloads > 0) parts.add("${uiState.activeDownloads} actif(s)")
+                            if (uiState.failedDownloads > 0) parts.add("${uiState.failedDownloads} échec(s)")
+                            Text(parts.joinToString(" · ").ifEmpty { "Aucun téléchargement" }, style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = OnSurfaceDarkTertiary)
+                }
+            }
+
+            // === EXTENSIONS ===
+            SettingsCard {
+                Row(Modifier.fillMaxWidth().clickable { onExtensionsClick() }, Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Extension, null, tint = Secondary, modifier = Modifier.size(22.dp))
+                        Column {
+                            Text("Extensions", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            Text("${uiState.extensionCount} source(s)", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = OnSurfaceDarkTertiary)
+                }
+            }
+
+            // === VÉRIFICATION ===
+            SettingsCard {
+                Column {
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(Icons.Default.Schedule, null, tint = Primary, modifier = Modifier.size(22.dp))
+                            Column { Text("Vérification auto", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("Toutes les ${uiState.updateIntervalHours}h", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary) }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Slider(value = uiState.updateIntervalHours.toFloat(), onValueChange = { viewModel.setUpdateInterval(it.toInt()) }, valueRange = 4f..48f, steps = 10,
+                        colors = SliderDefaults.colors(thumbColor = Primary, activeTrackColor = Primary, inactiveTrackColor = SurfaceDarkElevated))
+                }
+            }
+
+            // === NOTIFICATIONS ===
+            SettingsCard {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Notifications, null, tint = Tertiary, modifier = Modifier.size(22.dp))
+                        Column { Text("Notifications", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("Alerte nouveaux chapitres", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary) }
+                    }
+                    Switch(checked = uiState.notificationsEnabled, onCheckedChange = { viewModel.toggleNotifications() }, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = Primary.copy(alpha = 0.3f)))
+                }
+            }
+
+            // === TÉLÉCHARGEMENTS ===
+            SettingsCard {
+                Column {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Download, null, tint = Primary, modifier = Modifier.size(22.dp))
+                        Text("Téléchargements", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text("Simultané", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary); Text("${uiState.downloadMaxConcurrent}", style = MaterialTheme.typography.bodySmall) }
+                    Slider(value = uiState.downloadMaxConcurrent.toFloat(), onValueChange = { viewModel.setDownloadMaxConcurrent(it.toInt()) }, valueRange = 1f..5f, steps = 3,
+                        colors = SliderDefaults.colors(thumbColor = Primary, activeTrackColor = Primary, inactiveTrackColor = SurfaceDarkElevated))
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.Wifi, null, modifier = Modifier.size(16.dp), tint = OnSurfaceDarkSecondary)
+                            Text("Wi-Fi uniquement", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary)
+                        }
+                        Switch(checked = uiState.downloadOnWifiOnly, onCheckedChange = { viewModel.setDownloadOnWifiOnly(it) }, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = Primary.copy(alpha = 0.3f)))
+                    }
+                }
+            }
+
+            // === CACHE ===
+            SettingsCard {
+                Column {
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(Icons.Default.Storage, null, tint = OnSurfaceDarkSecondary, modifier = Modifier.size(22.dp))
+                            Column { Text("Cache", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("${uiState.cachedChapterCount} chapitre(s)", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary) }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = viewModel::clearCache, enabled = uiState.cachedChapterCount > 0 && !uiState.clearingCache,
+                        colors = ButtonDefaults.buttonColors(containerColor = Error),
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.padding(end = 8.dp))
                         Text(if (uiState.clearingCache) "Suppression…" else "Vider le cache")
                     }
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
-            Text("NovelReader v1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+            Spacer(Modifier.height(16.dp))
+            Text("NovelReader v1.0.0", style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkTertiary, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
 }
@@ -210,8 +223,10 @@ fun SettingsScreen(
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = SurfaceDarkCard),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
-    ) { Box(modifier = Modifier.padding(16.dp)) { content() } }
+    ) {
+        Box(modifier = Modifier.padding(16.dp)) { content() }
+    }
 }

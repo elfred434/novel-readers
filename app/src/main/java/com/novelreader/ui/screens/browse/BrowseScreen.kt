@@ -23,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novelreader.ui.components.EmptyView
@@ -30,6 +32,9 @@ import com.novelreader.ui.components.ErrorView
 import com.novelreader.ui.components.LoadingIndicator
 import com.novelreader.ui.components.NovelGridItem
 import com.novelreader.ui.components.SearchBar
+import com.novelreader.ui.theme.OnSurfaceDark
+import com.novelreader.ui.theme.OnSurfaceDarkSecondary
+import com.novelreader.ui.theme.SurfaceDark
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,104 +45,70 @@ fun BrowseScreen(
     val uiState by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
 
-    // Pagination normale (hors recherche)
     val shouldLoadMore by remember {
         derivedStateOf {
-            val lastVisibleItem = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null &&
-            lastVisibleItem.index >= gridState.layoutInfo.totalItemsCount - 6 &&
-            !uiState.isLoadingMore &&
-            uiState.hasMore &&
-            uiState.searchQuery.isBlank()
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
+            last != null && last.index >= gridState.layoutInfo.totalItemsCount - 6 &&
+                !uiState.isLoadingMore && uiState.hasMore && uiState.searchQuery.isBlank()
         }
     }
 
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) viewModel.loadMore()
-    }
+    LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) viewModel.loadMore() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Découverte", style = MaterialTheme.typography.headlineMedium) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                title = {
+                    Column {
+                        Text("Découverte", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold))
+                        if (!uiState.isLoading && uiState.novels.isNotEmpty()) {
+                            Text("${uiState.novels.size} novels disponibles", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDarkSecondary))
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = OnSurfaceDark)
             )
-        }
+        },
+        containerColor = SurfaceDark
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp)
         ) {
             SearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = viewModel::onSearchQueryChanged,
-                placeholder = "Rechercher un novel par titre ou auteur…",
+                placeholder = "Rechercher titre ou auteur…",
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
             when {
-                // Chargement initial
                 uiState.isLoading -> LoadingIndicator()
-
-                // Erreur et rien d'affiché
                 uiState.error != null && uiState.novels.isEmpty() -> {
-                    ErrorView(
-                        message = uiState.error ?: "Erreur inconnue",
-                        onRetry = viewModel::loadNovels
-                    )
+                    ErrorView(message = uiState.error ?: "Erreur", onRetry = viewModel::loadNovels)
                 }
-
-                // Recherche en cours (chargement de plusieurs pages)
                 uiState.isSearching -> LoadingIndicator(message = "Recherche en cours…")
-
-                // Résultats de recherche vides
                 uiState.searchQuery.isNotBlank() && !uiState.isSearching &&
                     viewModel.isShowingSearchResults && viewModel.displayedNovels.isEmpty() -> {
-                    EmptyView(
-                        message = "Aucun résultat pour \"${uiState.searchQuery}\".\n" +
-                            "Vérifie l'orthographe ou essaie un autre terme."
-                    )
+                    EmptyView(message = "Aucun résultat pour \"${uiState.searchQuery}\".")
                 }
-
-                // Contenu normal ou résultats de recherche
                 else -> {
                     val novels = viewModel.displayedNovels
-                    val searchResultLabel = if (viewModel.isShowingSearchResults) {
-                        "${novels.size} résultat${if (novels.size > 1) "s" else ""}"
-                    } else null
+                    val label = if (viewModel.isShowingSearchResults) "${novels.size} résultat${if (novels.size > 1) "s" else ""}" else null
 
                     Column {
-                        // Indicateur de nombre de résultats
-                        if (searchResultLabel != null) {
-                            Text(
-                                text = searchResultLabel,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
+                        label?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = OnSurfaceDarkSecondary, modifier = Modifier.padding(bottom = 4.dp))
                         }
-
                         LazyVerticalGrid(
                             state = gridState,
-                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            columns = GridCells.Adaptive(minSize = 150.dp),
                             contentPadding = PaddingValues(bottom = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(
-                                items = novels,
-                                key = { it.slug }
-                            ) { novel ->
-                                NovelGridItem(
-                                    novel = novel,
-                                    onClick = { onNovelClick(novel.slug) }
-                                )
+                            items(items = novels, key = { it.slug }) { novel ->
+                                NovelGridItem(novel = novel, onClick = { onNovelClick(novel.slug) })
                             }
                         }
                     }
