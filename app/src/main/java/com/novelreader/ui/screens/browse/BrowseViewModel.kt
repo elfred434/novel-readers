@@ -139,7 +139,7 @@ class BrowseViewModel @Inject constructor(
                 // Si une page échoue, on continue avec ce qu'on a
                 if (results.isEmpty()) {
                     _uiState.update { it.copy(isSearching = false, error = "Erreur lors de la recherche") }
-                    return
+                    return@launch
                 }
             }
 
