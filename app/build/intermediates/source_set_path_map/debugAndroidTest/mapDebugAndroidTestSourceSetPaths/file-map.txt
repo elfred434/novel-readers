@@ -1,0 +1,4 @@
+com.novelreader.test.app-androidTest-0 C:\NovelReader\app\build\generated\res\resValues\androidTest\debug
+com.novelreader.test.app-mergeDebugAndroidTestResources-1 C:\NovelReader\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+com.novelreader.test.app-mergeDebugAndroidTestResources-2 C:\NovelReader\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+com.novelreader.test.app-debugAndroidTest-3 C:\NovelReader\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
