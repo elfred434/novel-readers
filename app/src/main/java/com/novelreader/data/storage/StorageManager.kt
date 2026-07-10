@@ -95,6 +95,17 @@ class StorageManager @Inject constructor(
         } catch (e: Exception) { false }
     }
 
+    suspend fun deleteMultipleChapterFiles(novelSlug: String, chapterNumbers: List<Int>): Int = withContext(Dispatchers.IO) {
+        try {
+            val dir = getNovelDir(novelSlug) ?: return@withContext 0
+            var deleted = 0
+            for (num in chapterNumbers) {
+                if (dir.findFile("$num.json")?.delete() == true) deleted++
+            }
+            deleted
+        } catch (e: Exception) { 0 }
+    }
+
     suspend fun deleteNovelFiles(novelSlug: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val base = getBaseDir() ?: return@withContext false

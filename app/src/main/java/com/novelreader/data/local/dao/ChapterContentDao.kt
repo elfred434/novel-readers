@@ -21,6 +21,9 @@ interface ChapterContentDao {
     @Query("DELETE FROM chapter_content WHERE chapterId = :chapterId")
     suspend fun deleteChapterContent(chapterId: String)
 
+    @Query("DELETE FROM chapter_content WHERE chapterId IN (:chapterIds)")
+    suspend fun deleteMultipleChapterContents(chapterIds: List<String>)
+
     @Query("DELETE FROM chapter_content WHERE downloadedAt < :beforeTimestamp")
     suspend fun deleteOldContent(beforeTimestamp: Long)
 

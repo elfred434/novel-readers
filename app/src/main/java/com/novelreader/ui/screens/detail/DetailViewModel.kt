@@ -29,7 +29,9 @@ data class DetailUiState(
     val isOffline: Boolean = false,
     val downloadedChapters: Set<Int> = emptySet(),
     val downloadingChapters: Set<Int> = emptySet(),
-    val lastReadChapterNumber: Int? = null
+    val lastReadChapterNumber: Int? = null,
+    val isSelectionMode: Boolean = false,
+    val selectedChapters: Set<Int> = emptySet()
 )
 
 @HiltViewModel
@@ -160,8 +162,60 @@ class DetailViewModel @Inject constructor(
     fun deleteDownloadedChapter(chapterNumber: Int) {
         viewModelScope.launch {
             storageManager.deleteChapterFile(slug, chapterNumber)
+            repository.deleteDownloadedChapterData(slug, chapterNumber)
             val nums = withContext(Dispatchers.IO) { storageManager.getDownloadedChapterNumbers(slug).toSet() }
             _uiState.update { it.copy(downloadedChapters = nums) }
+        }
+    }
+
+    // ── Sélection multiple ─────────────────────────────
+
+    fun enterSelectionMode(chapterNumber: Int) {
+        _uiState.update { it.copy(
+            isSelectionMode = true,
+            selectedChapters = setOf(chapterNumber)
+        )}
+    }
+
+    fun exitSelectionMode() {
+        _uiState.update { it.copy(isSelectionMode = false, selectedChapters = emptySet()) }
+    }
+
+    fun toggleChapterSelection(chapterNumber: Int) {
+        _uiState.update { state ->
+            val newSelection = if (chapterNumber in state.selectedChapters) {
+                state.selectedChapters - chapterNumber
+            } else {
+                state.selectedChapters + chapterNumber
+            }
+            if (newSelection.isEmpty()) {
+                state.copy(isSelectionMode = false, selectedChapters = emptySet())
+            } else {
+                state.copy(selectedChapters = newSelection)
+            }
+        }
+    }
+
+    fun selectAllDownloaded() {
+        val downloaded = _uiState.value.downloadedChapters
+        _uiState.update { it.copy(selectedChapters = downloaded, isSelectionMode = true) }
+    }
+
+    val selectedCount: Int get() = _uiState.value.selectedChapters.size
+    val isSelectionActive: Boolean get() = _uiState.value.isSelectionMode
+
+    fun deleteSelectedChapters() {
+        val selected = _uiState.value.selectedChapters.toList()
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            storageManager.deleteMultipleChapterFiles(slug, selected)
+            repository.deleteMultipleDownloadedChapters(slug, selected)
+            val nums = withContext(Dispatchers.IO) { storageManager.getDownloadedChapterNumbers(slug).toSet() }
+            _uiState.update { it.copy(
+                downloadedChapters = nums,
+                isSelectionMode = false,
+                selectedChapters = emptySet()
+            )}
         }
     }
 }

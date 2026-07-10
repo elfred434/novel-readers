@@ -54,6 +54,9 @@ interface ChapterDao {
     @Query("UPDATE chapters SET isDownloaded = 0")
     suspend fun resetAllDownloadedFlags()
 
+    @Query("UPDATE chapters SET isDownloaded = 0 WHERE id IN (:chapterIds)")
+    suspend fun resetDownloadedFlags(chapterIds: List<String>)
+
     @Query("SELECT * FROM chapters WHERE isRead = 1 ORDER BY readAt DESC LIMIT :limit")
     fun getRecentHistory(limit: Int = 30): Flow<List<ChapterEntity>>
 

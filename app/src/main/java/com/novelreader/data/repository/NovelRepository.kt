@@ -226,6 +226,26 @@ class NovelRepository @Inject constructor(
         chapterDao.resetAllDownloadedFlags()
     }
 
+    // ===================== Suppression de téléchargements =====================
+
+    /**
+     * Supprime les données d'un chapitre téléchargé (cache + flag).
+     */
+    suspend fun deleteDownloadedChapterData(slug: String, chapterNumber: Int) {
+        val chapterId = chapterId(slug, chapterNumber)
+        chapterContentDao.deleteChapterContent(chapterId)
+        chapterDao.resetDownloadedFlags(listOf(chapterId))
+    }
+
+    /**
+     * Supprime les données de plusieurs chapitres téléchargés (cache + flags).
+     */
+    suspend fun deleteMultipleDownloadedChapters(slug: String, chapterNumbers: List<Int>) {
+        val chapterIds = chapterNumbers.map { chapterId(slug, it) }
+        chapterContentDao.deleteMultipleChapterContents(chapterIds)
+        chapterDao.resetDownloadedFlags(chapterIds)
+    }
+
     // ===================== Utilitaires =====================
 
     /**
