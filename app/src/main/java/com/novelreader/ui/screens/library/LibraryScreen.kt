@@ -1,7 +1,9 @@
 package com.novelreader.ui.screens.library
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewList
@@ -34,6 +38,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +54,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,16 +64,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.novelreader.data.local.entity.CategoryEntity
 import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.ui.components.EmptyView
 import com.novelreader.ui.components.LoadingIndicator
 import com.novelreader.ui.components.NovelGridItem
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
     onNovelClick: (String) -> Unit,
@@ -72,6 +81,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var contextMenuSlug by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -79,8 +89,7 @@ fun LibraryScreen(
                 title = {
                     Column {
                         val title = if (uiState.selectedCategoryId != null) {
-                            val catName = uiState.categories.find { it.id == uiState.selectedCategoryId }?.name ?: "Catégorie"
-                            catName
+                            uiState.categories.find { it.id == uiState.selectedCategoryId }?.name ?: "Catégorie"
                         } else "Bibliothèque"
                         Text(title, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold))
                         if (!uiState.isLoading && uiState.novels.isNotEmpty()) {
@@ -113,7 +122,7 @@ fun LibraryScreen(
                 "Aucun novel dans cette catégorie.\nAjoutes-en depuis la liste complète.", Modifier.padding(padding))
             else -> {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), modifier = Modifier.fillMaxSize().padding(padding)) {
-                    // Continue reading (seulement sur la vue "Tous")
+                    // Continue reading
                     if (uiState.selectedCategoryId == null) {
                         uiState.continueReading?.let { ch ->
                             item(key = "continue") {
@@ -157,14 +166,23 @@ fun LibraryScreen(
                         }
                     }
 
-                    // Novels grid/list
+                    // Novels
                     if (uiState.viewMode == ViewMode.GRID) {
                         uiState.novels.chunked(2).forEach { pair ->
                             item(key = "g_${pair.first().slug}") {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     pair.forEach { n ->
                                         Box(Modifier.weight(1f)) {
-                                            NovelGridItem(n, onClick = { onNovelClick(n.slug) }, unreadCount = n.unreadChapterCount)
+                                            // Appui long → menu contextuel
+                                            Box {
+                                                NovelGridItem(n, onClick = { onNovelClick(n.slug) }, unreadCount = n.unreadChapterCount,
+                                                    onLongClick = { contextMenuSlug = n.slug })
+                                                CategoryDropdownMenu(
+                                                    expanded = contextMenuSlug == n.slug,
+                                                    onDismiss = { contextMenuSlug = null },
+                                                    onTransfer = { viewModel.showNovelCategoryDialog(n) }
+                                                )
+                                            }
                                         }
                                     }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -174,7 +192,15 @@ fun LibraryScreen(
                         }
                     } else {
                         items(uiState.novels, key = { it.slug }) { n ->
-                            ListItem(novel = n, onClick = { onNovelClick(n.slug) }, onCategoryClick = { viewModel.showNovelCategoryDialog(n) })
+                            // Appui long → menu contextuel
+                            Box {
+                                ListItem(novel = n, onClick = { onNovelClick(n.slug) }, onLongClick = { contextMenuSlug = n.slug })
+                                CategoryDropdownMenu(
+                                    expanded = contextMenuSlug == n.slug,
+                                    onDismiss = { contextMenuSlug = null },
+                                    onTransfer = { viewModel.showNovelCategoryDialog(n) }
+                                )
+                            }
                             Spacer(Modifier.height(6.dp))
                         }
                     }
@@ -182,7 +208,7 @@ fun LibraryScreen(
             }
         }
 
-        // Dialog new category
+        // Dialog nouvelle catégorie
         if (uiState.showNewCategoryDialog) {
             AlertDialog(
                 onDismissRequest = viewModel::hideNewCategoryDialog,
@@ -202,14 +228,14 @@ fun LibraryScreen(
             )
         }
 
-        // Dialog novel categories
+        // Dialogue assignation catégorie
         if (uiState.showNovelCategoryDialog) {
             AlertDialog(
                 onDismissRequest = viewModel::hideNovelCategoryDialog,
                 containerColor = MaterialTheme.colorScheme.surface,
                 title = {
                     Column {
-                        Text("Catégories", fontWeight = FontWeight.Bold)
+                        Text("Transférer dans…", fontWeight = FontWeight.Bold)
                         Text(uiState.selectedNovelTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
@@ -227,10 +253,6 @@ fun LibraryScreen(
                                     colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                                 )
                                 Text(cat.name, style = MaterialTheme.typography.bodyMedium)
-                                Spacer(Modifier.weight(1f))
-                                IconButton(onClick = { viewModel.showDeleteCategory(cat.id) }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.Delete, "Supprimer", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                }
                             }
                         }
                         if (uiState.categories.isEmpty()) {
@@ -242,6 +264,30 @@ fun LibraryScreen(
                 dismissButton = { TextButton(onClick = viewModel::hideNovelCategoryDialog) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             )
         }
+    }
+}
+
+@Composable
+private fun CategoryDropdownMenu(expanded: Boolean, onDismiss: () -> Unit, onTransfer: () -> Unit) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        offset = DpOffset(8.dp, 0.dp)
+    ) {
+        DropdownMenuItem(
+            text = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.DriveFileMove, null, modifier = Modifier.size(18.dp))
+                Text("Transférer dans…")
+            }},
+            onClick = { onDismiss(); onTransfer() }
+        )
+        DropdownMenuItem(
+            text = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                Text("Retirer de la bibliothèque", color = MaterialTheme.colorScheme.error)
+            }},
+            onClick = { onDismiss() }
+        )
     }
 }
 
@@ -259,10 +305,12 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ListItem(novel: NovelEntity, onClick: () -> Unit, onCategoryClick: () -> Unit) {
+private fun ListItem(novel: NovelEntity, onClick: () -> Unit, onLongClick: () -> Unit) {
     Card(
-        onClick = onClick, shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -274,10 +322,6 @@ private fun ListItem(novel: NovelEntity, onClick: () -> Unit, onCategoryClick: (
                 if (novel.unreadChapterCount > 0) {
                     Text("${novel.unreadChapterCount} nouveau${if (novel.unreadChapterCount > 1) "x" else ""}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
                 }
-            }
-            // Category button
-            IconButton(onClick = onCategoryClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Add, "Catégories", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
             if (novel.unreadChapterCount > 0) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))

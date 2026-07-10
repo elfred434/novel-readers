@@ -1,6 +1,8 @@
 package com.novelreader.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,31 +36,30 @@ import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.data.model.Novel
 import com.novelreader.data.model.NovelStatus
 import com.novelreader.ui.theme.RatingGold
-import com.novelreader.ui.theme.TextPrimary
-import com.novelreader.ui.theme.TextSecondary
 
-/**
- * Carte novel — design Studio Noir.
- * Élévation cohérente, badge primaire discret, ombre douce.
- * La couleur primaire n'apparaît que sur le badge "nouveau".
- */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NovelGridItem(
     coverUrl: String, title: String, author: String,
     status: NovelStatus, rating: Double,
-    onClick: () -> Unit, unreadCount: Int = 0,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    unreadCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box {
             Column {
-                // Cover
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -68,11 +69,8 @@ fun NovelGridItem(
                 ) {
                     AsyncImage(
                         model = coverUrl, contentDescription = title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
                     )
-
-                    // Rating badge (bas-gauche)
                     if (rating > 0) {
                         Box(
                             modifier = Modifier
@@ -89,21 +87,15 @@ fun NovelGridItem(
                     }
                 }
 
-                // Infos
                 Column(Modifier.padding(10.dp)) {
-                    Text(
-                        title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
+                    Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        author, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
+                    Text(author, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
-            // Unread badge (primaire — le SEUL élément primaire de la carte)
             if (unreadCount > 0) {
                 Box(
                     modifier = Modifier
@@ -113,21 +105,19 @@ fun NovelGridItem(
                         .background(MaterialTheme.colorScheme.primary, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (unreadCount > 9) "N" else "$unreadCount",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 9.sp)
-                    )
+                    Text(text = if (unreadCount > 9) "N" else "$unreadCount",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 9.sp))
                 }
             }
         }
     }
 }
 
-// Helpers
 @Composable
-fun NovelGridItem(novel: NovelEntity, onClick: () -> Unit, modifier: Modifier = Modifier, unreadCount: Int = novel.unreadChapterCount) =
+fun NovelGridItem(novel: NovelEntity, onClick: () -> Unit, modifier: Modifier = Modifier, unreadCount: Int = novel.unreadChapterCount, onLongClick: () -> Unit = {}) =
     NovelGridItem(coverUrl = novel.coverImageUrl, title = novel.title, author = novel.author,
-        status = NovelStatus.fromString(novel.status), rating = novel.rating, onClick = onClick, unreadCount = unreadCount, modifier = modifier)
+        status = NovelStatus.fromString(novel.status), rating = novel.rating,
+        onClick = onClick, onLongClick = onLongClick, unreadCount = unreadCount, modifier = modifier)
 
 @Composable
 fun NovelGridItem(novel: Novel, onClick: () -> Unit, modifier: Modifier = Modifier) =
