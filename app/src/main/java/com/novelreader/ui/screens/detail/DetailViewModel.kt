@@ -156,4 +156,12 @@ class DetailViewModel @Inject constructor(
             repository.markChapterAsUnread(NovelRepository.chapterId(slug, chapter.chapterNumber))
         }
     }
+
+    fun deleteDownloadedChapter(chapterNumber: Int) {
+        viewModelScope.launch {
+            storageManager.deleteChapterFile(slug, chapterNumber)
+            val nums = withContext(Dispatchers.IO) { storageManager.getDownloadedChapterNumbers(slug).toSet() }
+            _uiState.update { it.copy(downloadedChapters = nums) }
+        }
+    }
 }

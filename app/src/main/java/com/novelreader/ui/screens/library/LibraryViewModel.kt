@@ -11,7 +11,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,7 +29,11 @@ data class LibraryUiState(
     val selectedNovelSlug: String = "",
     val selectedNovelTitle: String = "",
     val selectedNovelCategoryIds: Set<Long> = emptySet(),
-    val deleteCategoryId: Long? = null
+    val deleteCategoryId: Long? = null,
+    // Remove from library dialog
+    val showRemoveDialog: Boolean = false,
+    val removeSlug: String = "",
+    val removeTitle: String = ""
 )
 
 enum class ViewMode { GRID, LIST }
@@ -68,7 +71,6 @@ class LibraryViewModel @Inject constructor(
         val state = _uiState.value
         val catId = state.selectedCategoryId
         val all = state.allNovels
-
         if (catId == null) {
             _uiState.update { it.copy(novels = all, isLoading = false) }
         } else {
@@ -87,12 +89,21 @@ class LibraryViewModel @Inject constructor(
         _uiState.update { it.copy(viewMode = if (it.viewMode == ViewMode.GRID) ViewMode.LIST else ViewMode.GRID) }
     }
 
-    fun removeFromLibrary(slug: String) {
-        viewModelScope.launch { repository.removeNovelFromLibrary(slug) }
+    // ===== RETIRER DE LA BIBLIOTHÈQUE =====
+    fun showRemoveFromLibraryDialog(slug: String, title: String) {
+        _uiState.update { it.copy(showRemoveDialog = true, removeSlug = slug, removeTitle = title) }
+    }
+    fun hideRemoveFromLibraryDialog() {
+        _uiState.update { it.copy(showRemoveDialog = false) }
+    }
+    fun confirmRemoveFromLibrary() {
+        viewModelScope.launch {
+            repository.removeNovelFromLibrary(_uiState.value.removeSlug)
+            _uiState.update { it.copy(showRemoveDialog = false) }
+        }
     }
 
     // ===== Catégories =====
-
     fun selectCategory(categoryId: Long?) {
         _uiState.update { it.copy(selectedCategoryId = categoryId) }
         applyFilter()
@@ -127,41 +138,24 @@ class LibraryViewModel @Inject constructor(
     }
 
     // ===== Assignation novel ↔ catégorie =====
-
     fun showNovelCategoryDialog(novel: NovelEntity) {
         viewModelScope.launch {
             val catIds = categoryDao.getCategoryIdsForNovel(novel.slug).toSet()
             _uiState.update {
-                it.copy(
-                    showNovelCategoryDialog = true,
-                    selectedNovelSlug = novel.slug,
-                    selectedNovelTitle = novel.title,
-                    selectedNovelCategoryIds = catIds
-                )
+                it.copy(showNovelCategoryDialog = true, selectedNovelSlug = novel.slug,
+                    selectedNovelTitle = novel.title, selectedNovelCategoryIds = catIds)
             }
         }
     }
-
-    fun hideNovelCategoryDialog() {
-        _uiState.update { it.copy(showNovelCategoryDialog = false) }
-    }
-
+    fun hideNovelCategoryDialog() { _uiState.update { it.copy(showNovelCategoryDialog = false) } }
     fun toggleNovelCategory(categoryId: Long) {
         val current = _uiState.value.selectedNovelCategoryIds
-        _uiState.update {
-            if (categoryId in current) {
-                it.copy(selectedNovelCategoryIds = current - categoryId)
-            } else {
-                it.copy(selectedNovelCategoryIds = current + categoryId)
-            }
-        }
+        _uiState.update { if (categoryId in current) it.copy(selectedNovelCategoryIds = current - categoryId)
+            else it.copy(selectedNovelCategoryIds = current + categoryId) }
     }
-
     fun saveNovelCategories() {
-        val slug = _uiState.value.selectedNovelSlug
-        val catIds = _uiState.value.selectedNovelCategoryIds.toList()
         viewModelScope.launch {
-            categoryDao.setCategoriesForNovel(slug, catIds)
+            categoryDao.setCategoriesForNovel(_uiState.value.selectedNovelSlug, _uiState.value.selectedNovelCategoryIds.toList())
             _uiState.update { it.copy(showNovelCategoryDialog = false) }
             applyFilter()
         }
