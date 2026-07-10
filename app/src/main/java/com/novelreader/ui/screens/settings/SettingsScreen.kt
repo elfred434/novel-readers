@@ -100,7 +100,7 @@ fun SettingsScreen(
                                     .weight(1f)
                                     .height(40.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (selected) Brush.horizontalGradient(listOf(Primary, PrimaryVariant)) else SurfaceDarkElevated)
+                                    .then(if (selected) Modifier.background(brush = Brush.horizontalGradient(listOf(Primary, PrimaryVariant))) else Modifier.background(color = SurfaceDarkElevated))
                                     .clickable { viewModel.setThemeType(index) },
                                 contentAlignment = Alignment.Center
                             ) {

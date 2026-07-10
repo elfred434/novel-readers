@@ -279,7 +279,7 @@ private fun CategoryChip(name: String, selected: Boolean, onClick: () -> Unit, o
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(100.dp))
-            .background(if (selected) Brush.horizontalGradient(listOf(Primary, PrimaryVariant)) else SurfaceDarkCard)
+            .then(if (selected) Modifier.background(brush = Brush.horizontalGradient(listOf(Primary, PrimaryVariant))) else Modifier.background(color = SurfaceDarkCard))
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp)
     ) {
