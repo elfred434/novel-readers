@@ -226,8 +226,7 @@ fun SettingsScreen(
                         }
                         Switch(checked = uiState.wifiHighDataMode, onCheckedChange = { viewModel.toggleWifiHighDataMode() },
                             enabled = uiState.isOnline,
-                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                disabledThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), disabledTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(
