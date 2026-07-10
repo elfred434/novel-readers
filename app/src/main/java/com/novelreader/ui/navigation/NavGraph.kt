@@ -32,8 +32,6 @@ import com.novelreader.ui.screens.library.LibraryScreen
 import com.novelreader.ui.screens.reader.ReaderScreen
 import com.novelreader.ui.screens.settings.SettingsScreen
 import com.novelreader.ui.screens.updates.UpdatesScreen
-import com.novelreader.ui.theme.*
-import androidx.compose.ui.graphics.Color
 
 @Composable
 fun NovelReaderNavigation() {
@@ -48,15 +46,14 @@ fun NovelReaderNavigation() {
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
-                    containerColor = SurfaceDarkElevated,
-                    tonalElevation = 0.dp,
-                    contentColor = OnSurfaceDark
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
                 ) {
                     Screen.bottomNavItems.forEach { screen ->
                         val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                         NavigationBarItem(
-                            icon = { screen.icon?.let { Icon(it, contentDescription = screen.title, tint = if (selected) Primary else OnSurfaceDarkSecondary) } },
-                            label = { Text(screen.title, style = MaterialTheme.typography.labelSmall, color = if (selected) Primary else OnSurfaceDarkSecondary) },
+                            icon = { screen.icon?.let { Icon(it, contentDescription = screen.title) } },
+                            label = { Text(screen.title, style = MaterialTheme.typography.labelSmall) },
                             selected = selected,
                             onClick = {
                                 navController.navigate(screen.route) {
@@ -66,14 +63,18 @@ fun NovelReaderNavigation() {
                                 }
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = Primary.copy(alpha = 0.15f)
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             )
                         )
                     }
                 }
             }
         },
-        containerColor = SurfaceDark
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         NavHost(
             navController = navController,

@@ -2,89 +2,82 @@ package com.novelreader.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ═══════════════════════════════════════════════
-// PALETTE PRINCIPALE — Luxe sombre & accents vifs
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// STUDIO NOIR — Palette design system v1.0
+// Usage : une seule couleur d'accent (Primary), utilisée avec parcimonie.
+// Le reste de la hiérarchie repose sur 5 niveaux de gris.
+// ═══════════════════════════════════════════════════════════════
 
-// Neutres profonds
-val SurfaceDark = Color(0xFF0A0A0F)
-val SurfaceDarkElevated = Color(0xFF12121A)
-val SurfaceDarkCard = Color(0xFF1A1A24)
-val SurfaceDarkCardHover = Color(0xFF22222E)
-val OutlineDark = Color(0xFF2A2A3C)
-val OutlineDarkVariant = Color(0xFF3A3A4E)
-val OnSurfaceDark = Color(0xFFECECF1)
-val OnSurfaceDarkSecondary = Color(0xFF9E9EB8)
-val OnSurfaceDarkTertiary = Color(0xFF6E6E8A)
+// ── Surfaces (dark) ──────────────────────────────────────────
+val SurfaceDeep = Color(0xFF000000)        // Fond racine — noir absolu
+val SurfaceDark = Color(0xFF050505)         // Arrière-plan écrans
+val SurfaceDarkElevated = Color(0xFF0D0D0D) // Navigation, TopBar
+val SurfaceDarkCard = Color(0xFF141414)     // Cartes, sections
+val SurfaceDarkCardHover = Color(0xFF1C1C1C)
+val SurfaceDarkSheet = Color(0xFF1A1A1A)   // Bottom sheets, dialogues
 
-// Neutres clairs
-val SurfaceLight = Color(0xFFF5F5FA)
+// ── Textes (dark) ────────────────────────────────────────────
+val TextPrimary = Color(0xFFE8E8E8)        // Corps, titres importants
+val TextSecondary = Color(0xFF999999)       // Auteurs, métadonnées
+val TextTertiary = Color(0xFF666666)       // Timestamps, notes, labels discrets
+val TextDisabled = Color(0xFF3A3A3A)
+
+// ── Liserés / Outlines (dark) ────────────────────────────────
+val OutlineStandard = Color(0xFF2A2A2A)
+val OutlineSubtle = Color(0xFF1E1E1E)
+
+// ── Accent unique — Rubis atténué ────────────────────────────
+// Usage strict : un seul élément par écran, UNIQuement les CTAs principaux.
+val Primary = Color(0xFFCC3344)
+val PrimaryVariant = Color(0xFFB82A3A)
+val PrimaryContainer = Color(0xFF2E0A0E)    // Fond des boutons primaires
+val OnPrimary = Color(0xFFFFFFFF)
+
+// ── Accents secondaires (usage très limité) ──────────────────
+val Secondary = Color(0xFF6B6B6B)           // Pour éléments non-interactifs mis en avant
+val SecondaryVariant = Color(0xFF555555)
+
+// ── Accent tertiaire (presque jamais utilisé) ────────────────
+val Tertiary = Color(0xFF4A6FA5)            // Bleu-gris discret
+
+// ── Couleurs sémantiques ─────────────────────────────────────
+val Error = Color(0xFFE04848)
+val ErrorContainer = Color(0xFF2E0A0A)
+val Success = Color(0xFF3CB371)            // Vert doux
+val SuccessContainer = Color(0xFF0A2E14)
+val Warning = Color(0xFFD4A853)            // Ambre doux
+val RatingGold = Color(0xFFD4A853)
+
+// ── Statuts ──────────────────────────────────────────────────
+val StatusOngoing = Success
+val StatusCompleted = Color(0xFF4A6FA5)    // Bleu-gris discret
+val StatusHiatus = Warning
+val StatusCancelled = Error
+
+// ── Fond dédié lecteur ───────────────────────────────────────
+// #121212 avec 2% de teinte rouge pour la chaleur — scientifique
+val ReaderBackground = Color(0xFF131313)
+val ReaderText = Color(0xFFE0DED8)
+val ReaderSepia = Color(0xFFF5ECD7)
+val ReaderSepiaBg = Color(0xFFF8F4E8)
+
+// ── Surfaces (light) ─────────────────────────────────────────
+val SurfaceLight = Color(0xFFF5F5F0)
 val SurfaceLightElevated = Color(0xFFFFFFFF)
 val SurfaceLightCard = Color(0xFFFFFFFF)
-val OutlineLight = Color(0xFFE0E0EC)
-val OnSurfaceLight = Color(0xFF0A0A0F)
-val OnSurfaceLightSecondary = Color(0xFF5E5E78)
-val OnSurfaceLightTertiary = Color(0xFF8E8EA8)
+val TextPrimaryLight = Color(0xFF1A1A1A)
+val TextSecondaryLight = Color(0xFF6B6B6B)
+val TextTertiaryLight = Color(0xFF999999)
+val OutlineLight = Color(0xFFE0E0D8)
+val PrimaryLight = Color(0xFFB82A3A)
 
-// Accent principal — Rouge rubis intense
-val Primary = Color(0xFFE11D48)
-val PrimaryVariant = Color(0xFFBE123C)
-val PrimaryContainer = Color(0xFF4A0D2B)
-val OnPrimary = Color(0xFFFFFFFF)
-val PrimaryGradientStart = Color(0xFFE11D48)
-val PrimaryGradientEnd = Color(0xFF9F1239)
+// ── Overlay ──────────────────────────────────────────────────
+val Scrim = Color(0xCC000000)
+val ScrimLight = Color(0x80000000)
 
-// Accent secondaire — Or ambré
-val Secondary = Color(0xFFF59E0B)
-val SecondaryVariant = Color(0xFFD97706)
-val SecondaryContainer = Color(0xFF451A03)
-val OnSecondary = Color(0xFFFFFFFF)
-
-// Accent tertiaire — Violet royal
-val Tertiary = Color(0xFF8B5CF6)
-val TertiaryVariant = Color(0xFF7C3AED)
-val TertiaryContainer = Color(0xFF2E1065)
-
-// Sémantique
-val Error = Color(0xFFEF4444)
-val ErrorContainer = Color(0xFF450A0A)
-val Success = Color(0xFF22C55E)
-val SuccessContainer = Color(0xFF052E16)
-val Warning = Color(0xFFF59E0B)
-val Info = Color(0xFF3B82F6)
-
-// Autres
-val RatingGold = Color(0xFFFBBF24)
-val StatusOngoing = Color(0xFF22C55E)
-val StatusCompleted = Color(0xFF3B82F6)
-val StatusHiatus = Color(0xFFF59E0B)
-val StatusCancelled = Color(0xFFEF4444)
-
-// Verre / Glassmorphism
-val GlassWhite = Color(0x14FFFFFF)
-val GlassWhiteStrong = Color(0x1AFFFFFF)
-val GlassWhiteBorder = Color(0x0DFFFFFF)
-val GlassDark = Color(0x14000000)
-val GlassDarkBorder = Color(0x0A000000)
-
-// Overlay
-val Scrim = Color(0x99000000)
-val ScrimLight = Color(0x66000000)
-
-// ═══════════════════════════════════════════════
-// PALETTE AMOLED (noir pur)
-// ═══════════════════════════════════════════════
-
-val AmoledBackground = Color(0xFF000000)
-val AmoledSurface = Color(0xFF050508)
-val AmoledSurfaceVariant = Color(0xFF0D0D14)
-val AmoledOnSurface = Color(0xFFE8E8EA)
-val AmoledOnSurfaceVariant = Color(0xFF88889C)
-val AmoledOutline = Color(0xFF1A1A24)
-
-// ═══════════════════════════════════════════════
-// THÈMES DISPONIBLES
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// THÈMES
+// ═══════════════════════════════════════════════════════════════
 
 enum class AppTheme(val displayName: String, val isDark: Boolean) {
     SYSTEM("Système", true),

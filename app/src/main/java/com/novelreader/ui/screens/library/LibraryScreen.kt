@@ -1,12 +1,7 @@
 package com.novelreader.ui.screens.library
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,17 +17,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -55,22 +48,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.novelreader.data.local.entity.CategoryEntity
 import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.ui.components.EmptyView
 import com.novelreader.ui.components.LoadingIndicator
 import com.novelreader.ui.components.NovelGridItem
-import com.novelreader.ui.components.StyledStatusBadge
-import com.novelreader.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,237 +74,142 @@ fun LibraryScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Bibliothèque", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("Bibliothèque", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold))
                         if (!uiState.isLoading && uiState.novels.isNotEmpty()) {
-                            Text("${uiState.novels.size} novels", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDarkSecondary))
+                            Text("${uiState.novels.size} novel${if (uiState.novels.size > 1) "s" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
                 actions = {
-                    IconButton(onClick = viewModel::toggleViewMode) {
-                        Icon(
-                            if (uiState.viewMode == ViewMode.GRID) Icons.Default.ViewList else Icons.Default.ViewList,
-                            contentDescription = "Vue liste",
-                            tint = OnSurfaceDark
-                        )
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Paramètres", tint = OnSurfaceDark)
-                    }
+                    IconButton(onClick = viewModel::toggleViewMode) { Icon(if (uiState.viewMode == ViewMode.GRID) Icons.Default.ViewList else Icons.Default.GridView, "Vue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, "Paramètres", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = OnSurfaceDark
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = MaterialTheme.colorScheme.onSurface)
             )
-        },
-        containerColor = SurfaceDark
-    ) { paddingValues ->
+        }
+    ) { padding ->
         when {
-            uiState.isLoading -> LoadingIndicator(modifier = Modifier.padding(paddingValues))
-            uiState.novels.isEmpty() -> EmptyView(
-                message = "Ta bibliothèque est vide.\nAjoute des novels depuis Découverte.",
-                modifier = Modifier.padding(paddingValues)
-            )
+            uiState.isLoading -> LoadingIndicator(Modifier.padding(padding))
+            uiState.novels.isEmpty() -> EmptyView("Ta bibliothèque est vide.\nAjoute des novels depuis Découverte.", Modifier.padding(padding))
             else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize().padding(paddingValues)
-                ) {
-                    // === HERO: Continuer la lecture ===
+                LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), modifier = Modifier.fillMaxSize().padding(padding)) {
+                    // Continue reading
                     uiState.continueReading?.let { ch ->
                         item(key = "continue") {
-                            ContinueReadingCard(
-                                novelSlug = ch.novelSlug,
-                                novelTitle = ch.novelTitle.ifBlank { ch.novelSlug },
-                                chapterNumber = ch.chapterNumber,
-                                onClick = { onNovelClick(ch.novelSlug) }
-                            )
-                        }
-                    }
-
-                    // === CATÉGORIES ===
-                    item(key = "categories") {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Card(
+                                onClick = { onNovelClick(ch.novelSlug) },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                             ) {
-                                Text("Catégories", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                                IconButton(onClick = viewModel::showNewCategoryDialog, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Add, contentDescription = "Nouvelle", tint = Primary, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                item { CategoryChip(name = "Tous", selected = uiState.selectedCategoryId == null, onClick = { viewModel.selectCategory(null) }) }
-                                items(uiState.categories, key = { it.id }) { cat ->
-                                    CategoryChip(
-                                        name = cat.name,
-                                        selected = uiState.selectedCategoryId == cat.id,
-                                        onClick = { viewModel.selectCategory(cat.id) },
-                                        onDelete = { viewModel.showDeleteCategory(cat.id) }
-                                    )
+                                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                    }
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Continuer la lecture", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+                                        Text(ch.novelTitle.ifBlank { ch.novelSlug }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("Chapitre ${ch.chapterNumber}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // === GRILLE DES NOVELS ===
-                    val novels = uiState.novels
+                    // Categories
+                    item(key = "cats") {
+                        Column(Modifier.padding(bottom = 8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Catégories", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                IconButton(onClick = viewModel::showNewCategoryDialog, modifier = Modifier.size(28.dp)) {
+                                    Icon(Icons.Default.Add, "Nouvelle", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                item { FilterChip("Tous", uiState.selectedCategoryId == null) { viewModel.selectCategory(null) } }
+                                items(uiState.categories, key = { it.id }) { cat ->
+                                    FilterChip(cat.name, uiState.selectedCategoryId == cat.id) { viewModel.selectCategory(cat.id) }
+                                }
+                            }
+                        }
+                    }
 
+                    // Novels grid
                     if (uiState.viewMode == ViewMode.GRID) {
-                        val rows = novels.chunked(2)
-                        rows.forEach { pair ->
-                            item(key = "row_${pair.first().slug}") {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    pair.forEach { novel ->
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            NovelGridItem(novel = novel, onClick = { onNovelClick(novel.slug) }, unreadCount = novel.unreadChapterCount)
-                                        }
-                                    }
+                        uiState.novels.chunked(2).forEach { pair ->
+                            item(key = "g_${pair.first().slug}") {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    pair.forEach { n -> Box(Modifier.weight(1f)) { NovelGridItem(n, onClick = { onNovelClick(n.slug) }, unreadCount = n.unreadChapterCount) } }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
+                                Spacer(Modifier.height(10.dp))
                             }
                         }
                     } else {
-                        items(items = novels, key = { it.slug }) { novel ->
-                            LibraryListRow(novel = novel, onClick = { onNovelClick(novel.slug) })
+                        items(uiState.novels, key = { it.slug }) { n ->
+                            ListItem(n, onClick = { onNovelClick(n.slug) })
+                            Spacer(Modifier.height(6.dp))
                         }
                     }
                 }
             }
         }
 
-        // Dialogue création catégorie
+        // New category dialog
         if (uiState.showNewCategoryDialog) {
             AlertDialog(
                 onDismissRequest = viewModel::hideNewCategoryDialog,
-                containerColor = SurfaceDarkCard,
-                titleContentColor = OnSurfaceDark,
-                textContentColor = OnSurfaceDarkSecondary,
+                containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text("Nouvelle catégorie", fontWeight = FontWeight.Bold) },
                 text = {
-                    OutlinedTextField(
-                        value = uiState.newCategoryName,
-                        onValueChange = viewModel::onNewCategoryNameChange,
-                        placeholder = { Text("Nom") },
-                        singleLine = true,
+                    OutlinedTextField(uiState.newCategoryName, viewModel::onNewCategoryNameChange,
+                        placeholder = { Text("Nom") }, singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Primary,
-                            cursorColor = Primary,
-                            focusedTextColor = OnSurfaceDark,
-                            unfocusedTextColor = OnSurfaceDark,
-                            focusedContainerColor = SurfaceDarkElevated,
-                            unfocusedContainerColor = SurfaceDarkElevated
-                        )
-                    )
+                            focusedBorderColor = MaterialTheme.colorScheme.primary, cursorColor = MaterialTheme.colorScheme.primary,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ))
                 },
-                confirmButton = { Button(onClick = viewModel::createCategory, colors = ButtonDefaults.buttonColors(containerColor = Primary)) { Text("Créer") } },
-                dismissButton = { TextButton(onClick = viewModel::hideNewCategoryDialog) { Text("Annuler", color = OnSurfaceDarkSecondary) } }
-            )
-        }
-
-        // Dialogue suppression catégorie
-        uiState.deleteCategoryId?.let { id ->
-            AlertDialog(
-                onDismissRequest = viewModel::hideDeleteCategory,
-                containerColor = SurfaceDarkCard,
-                title = { Text("Supprimer ?", fontWeight = FontWeight.Bold) },
-                text = { Text("La catégorie sera supprimée.", color = OnSurfaceDarkSecondary) },
-                confirmButton = { Button(onClick = { viewModel.deleteCategory(id) }, colors = ButtonDefaults.buttonColors(containerColor = Error)) { Text("Supprimer") } },
-                dismissButton = { TextButton(onClick = viewModel::hideDeleteCategory) { Text("Annuler", color = OnSurfaceDarkSecondary) } }
+                confirmButton = { Button(onClick = viewModel::createCategory, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("Créer") } },
+                dismissButton = { TextButton(onClick = viewModel::hideNewCategoryDialog) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             )
         }
     }
 }
 
 @Composable
-private fun ContinueReadingCard(novelSlug: String, novelTitle: String, chapterNumber: Int, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(Primary.copy(alpha = 0.2f), Primary.copy(alpha = 0.05f))
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(Primary, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Continuer la lecture", style = MaterialTheme.typography.labelLarge.copy(color = Primary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp))
-                    Spacer(Modifier.height(4.dp))
-                    Text(novelTitle, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Chapitre $chapterNumber", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDarkSecondary))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CategoryChip(name: String, selected: Boolean, onClick: () -> Unit, onDelete: (() -> Unit)? = null) {
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
-        modifier = Modifier
+        Modifier
             .clip(RoundedCornerShape(100.dp))
-            .then(if (selected) Modifier.background(brush = Brush.horizontalGradient(listOf(Primary, PrimaryVariant))) else Modifier.background(color = SurfaceDarkCard))
+            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(name, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = if (selected) Color.White else OnSurfaceDarkSecondary))
-            if (onDelete != null) {
-                IconButton(onClick = onDelete, modifier = Modifier.size(16.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Supprimer", tint = if (selected) Color.White else OnSurfaceDarkTertiary, modifier = Modifier.size(12.dp))
-                }
-            }
-        }
+        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun LibraryListRow(novel: NovelEntity, onClick: () -> Unit) {
+private fun ListItem(novel: NovelEntity, onClick: () -> Unit) {
     Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDarkCard),
-        modifier = Modifier.fillMaxWidth()
+        onClick = onClick, shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            AsyncImage(
-                model = novel.coverImageUrl, contentDescription = novel.title,
-                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
-                contentScale = ContentScale.Crop
-            )
-            Column(modifier = Modifier.weight(1f)) {
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AsyncImage(model = novel.coverImageUrl, contentDescription = novel.title,
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+            Column(Modifier.weight(1f)) {
                 Text(novel.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(novel.author, style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDarkSecondary), maxLines = 1)
+                Text(novel.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 if (novel.unreadChapterCount > 0) {
-                    Text("${novel.unreadChapterCount} nouveau${if (novel.unreadChapterCount > 1) "x" else ""}", style = MaterialTheme.typography.labelSmall.copy(color = Primary, fontWeight = FontWeight.Bold))
+                    Text("${novel.unreadChapterCount} nouveau${if (novel.unreadChapterCount > 1) "x" else ""}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
                 }
             }
             if (novel.unreadChapterCount > 0) {
-                Box(modifier = Modifier.size(8.dp).background(Primary, CircleShape))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
             }
         }
     }
