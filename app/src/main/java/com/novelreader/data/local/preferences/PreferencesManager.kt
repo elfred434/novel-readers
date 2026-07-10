@@ -62,7 +62,7 @@ class PreferencesManager(private val context: Context) {
     suspend fun getSafTreeUri(): String? {
         return context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
     }
-    suspend fun setSafTreeUri(uri: String?) { context.dataStore.edit { it[KEY_STORAGE_SAF_URI] = uri } }
+    suspend fun setSafTreeUri(uri: String?) { context.dataStore.edit { if (uri != null) it[KEY_STORAGE_SAF_URI] = uri else it.remove(KEY_STORAGE_SAF_URI) } }
 
     val storageMigrationDone: Flow<Boolean> = context.dataStore.data.map { it[KEY_STORAGE_MIGRATION_DONE] ?: false }
     suspend fun setStorageMigrationDone(v: Boolean) { context.dataStore.edit { it[KEY_STORAGE_MIGRATION_DONE] = v } }
