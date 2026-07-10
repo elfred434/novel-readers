@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +24,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
@@ -60,7 +58,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.novelreader.data.storage.StorageType
 import com.novelreader.ui.theme.AppTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,13 +69,11 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    val safLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
+    val safLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
             context.contentResolver.takePersistableUriPermission(uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            viewModel.setSafStorage(uri.toString())
+            viewModel.setSafUri(uri.toString())
         }
     }
 
@@ -91,8 +86,7 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Theme
@@ -108,7 +102,9 @@ fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                         AppTheme.entries.forEachIndexed { i, t ->
                             val sel = uiState.themeType == i
-                            Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp)).background(if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { viewModel.setThemeType(i) }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
+                                .background(if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { viewModel.setThemeType(i) }, contentAlignment = Alignment.Center) {
                                 Text(t.displayName, style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant))
                             }
                         }
@@ -116,7 +112,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Downloads queue
+            // Queue
             SectionCard {
                 Row(Modifier.fillMaxWidth().clickable { onDownloadsClick() }, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
@@ -160,34 +156,36 @@ fun SettingsScreen(
                 }
             }
 
-            // Storage section
+            // === STOCKAGE SAF — UNIQUE EMPLACEMENT ===
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.FolderOpen, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Stockage", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                            val loc = if (uiState.storageType == 0) "Interne" else "Externe (SAF)"
-                            Text("$loc · ${uiState.downloadCountOnDisk} fichier(s) · ${uiState.storageUsed}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Dossier de stockage", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            if (uiState.hasStorageLocation) {
+                                Text("${uiState.downloadCountOnDisk} chapitre(s) · ${uiState.storageUsed}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                Text("Aucun dossier choisi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                     Button(
                         onClick = { safLauncher.launch(null) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (uiState.hasStorageLocation) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(Icons.Default.FolderOpen, null, modifier = Modifier.padding(end = 6.dp))
-                        Text("Changer l'emplacement")
+                        Text(if (uiState.hasStorageLocation) "Changer de dossier" else "Choisir un dossier")
                     }
-                    Button(
-                        onClick = { viewModel.refreshStorageInfo() },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.padding(end = 6.dp))
-                        Text("Actualiser")
+                    if (uiState.hasStorageLocation) {
+                        Button(
+                            onClick = { viewModel.refreshStorageInfo() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
+                        ) { Icon(Icons.Default.Refresh, null, modifier = Modifier.padding(end = 6.dp)); Text("Actualiser") }
                     }
                 }
             }
@@ -218,8 +216,7 @@ fun SettingsScreen(
                     }
                     Button(onClick = viewModel::clearCache, enabled = uiState.cachedChapterCount > 0 && !uiState.clearingCache,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
-                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.padding(end = 6.dp))
-                        Text(if (uiState.clearingCache) "Suppression…" else "Vider le cache")
+                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.padding(end = 6.dp)); Text(if (uiState.clearingCache) "Suppression…" else "Vider le cache")
                     }
                 }
             }

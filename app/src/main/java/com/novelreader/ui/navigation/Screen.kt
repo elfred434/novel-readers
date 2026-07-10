@@ -76,11 +76,6 @@ sealed class Screen(
         title = "Téléchargements"
     )
 
-    data object Onboarding : Screen(
-        route = "onboarding",
-        title = "Bienvenue"
-    )
-
     data object Search : Screen(
         route = "search",
         title = "Recherche"

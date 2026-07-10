@@ -28,7 +28,7 @@ data class SettingsUiState(
     val activeDownloads: Int = 0,
     val failedDownloads: Int = 0,
     val extensionCount: Int = 1,
-    val storageType: Int = 0,
+    val hasStorageLocation: Boolean = false,
     val storageUsed: String = "0 Mo",
     val downloadCountOnDisk: Int = 0
 )
@@ -39,8 +39,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: NovelRepository,
     private val downloadManager: DownloadManager,
     private val extensionManager: ExtensionManager,
-    private val storageManager: StorageManager,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    private val storageManager: StorageManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -52,49 +51,37 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.notificationsEnabled.collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } } }
         viewModelScope.launch { prefs.downloadMaxConcurrent.collect { v -> _uiState.update { it.copy(downloadMaxConcurrent = v) } } }
         viewModelScope.launch { prefs.downloadOnWifiOnly.collect { v -> _uiState.update { it.copy(downloadOnWifiOnly = v) } } }
-        viewModelScope.launch {
-            extensionManager.sources.collect { sources ->
-                _uiState.update { it.copy(extensionCount = sources.size) }
-            }
-        }
+        viewModelScope.launch { extensionManager.sources.collect { sources -> _uiState.update { it.copy(extensionCount = sources.size) } } }
         viewModelScope.launch {
             downloadManager.queue.collect { queue ->
-                _uiState.update {
-                    it.copy(
-                        activeDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.DOWNLOADING || q.status == com.novelreader.data.download.DownloadStatus.QUEUED },
-                        failedDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.FAILED }
-                    )
-                }
+                _uiState.update { it.copy(
+                    activeDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.DOWNLOADING || q.status == com.novelreader.data.download.DownloadStatus.QUEUED },
+                    failedDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.FAILED }
+                )}
             }
         }
-        viewModelScope.launch {
-            _uiState.update { it.copy(cachedChapterCount = repository.getCachedCount()) }
-        }
+        viewModelScope.launch { _uiState.update { it.copy(cachedChapterCount = repository.getCachedCount()) } }
         loadStorageInfo()
     }
 
     private fun loadStorageInfo() {
         viewModelScope.launch {
-            val type = prefs.getStorageType()
-            val count = withContext(Dispatchers.IO) { storageManager.countDownloadedChapters() }
-            val bytes = withContext(Dispatchers.IO) { storageManager.getStorageSizeBytes() }
+            val hasUri = prefs.getSafTreeUri() != null
+            val count = withContext(Dispatchers.IO) { if (hasUri) storageManager.countDownloadedChapters() else 0 }
+            val bytes = withContext(Dispatchers.IO) { if (hasUri) storageManager.getStorageSizeBytes() else 0L }
             val sizeStr = when {
                 bytes < 1024 -> "$bytes o"
                 bytes < 1024 * 1024 -> "${bytes / 1024} Ko"
                 else -> "%.1f Mo".format(bytes.toDouble() / (1024 * 1024))
             }
-            _uiState.update { it.copy(storageType = type, downloadCountOnDisk = count, storageUsed = sizeStr) }
+            _uiState.update { it.copy(hasStorageLocation = hasUri, downloadCountOnDisk = count, storageUsed = sizeStr) }
         }
     }
 
     fun refreshStorageInfo() { loadStorageInfo() }
 
-    suspend fun getStorageDisplayPath(): String {
-        val type = prefs.getStorageType()
-        return when (type) {
-            0 -> context.filesDir?.let { "${it}/novels" } ?: "Stockage interne"
-            else -> prefs.getSafTreeUri() ?: "Dossier externe"
-        }
+    fun setSafUri(uri: String) {
+        viewModelScope.launch { prefs.setSafTreeUri(uri); loadStorageInfo() }
     }
 
     fun setThemeType(type: Int) { viewModelScope.launch { prefs.setThemeType(type) } }
@@ -103,14 +90,6 @@ class SettingsViewModel @Inject constructor(
     fun setDownloadMaxConcurrent(n: Int) { viewModelScope.launch { prefs.setDownloadMaxConcurrent(n); downloadManager.maxConcurrent = n } }
     fun setDownloadOnWifiOnly(e: Boolean) { viewModelScope.launch { prefs.setDownloadOnWifiOnly(e) } }
     fun retryFailedDownloads() { downloadManager.retryAllFailed() }
-
-    fun setSafStorage(uri: String) {
-        viewModelScope.launch {
-            prefs.setSafTreeUri(uri)
-            storageManager.setStorageType(com.novelreader.data.storage.StorageType.SAF)
-            loadStorageInfo()
-        }
-    }
 
     fun clearCache() {
         viewModelScope.launch {

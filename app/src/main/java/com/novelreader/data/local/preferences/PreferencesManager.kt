@@ -12,12 +12,12 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "novelreader_settings")
 
 class PreferencesManager(private val context: Context) {
 
-    // ===== Thème =====
     val themeType: Flow<Int> = context.dataStore.data.map { it[KEY_THEME] ?: 0 }
     suspend fun setThemeType(type: Int) { context.dataStore.edit { it[KEY_THEME] = type } }
 
@@ -51,24 +51,13 @@ class PreferencesManager(private val context: Context) {
     val downloadOnWifiOnly: Flow<Boolean> = context.dataStore.data.map { it[KEY_DOWNLOAD_ON_WIFI_ONLY] ?: true }
     suspend fun setDownloadOnWifiOnly(e: Boolean) { context.dataStore.edit { it[KEY_DOWNLOAD_ON_WIFI_ONLY] = e } }
 
-    // ===== Storage =====
-    val storageType: Flow<Int> = context.dataStore.data.map { it[KEY_STORAGE_TYPE] ?: 0 }
-    suspend fun setStorageType(t: Int) { context.dataStore.edit { it[KEY_STORAGE_TYPE] = t } }
-
-    suspend fun getStorageType(): Int {
-        return context.dataStore.data.first()[KEY_STORAGE_TYPE] ?: 0
-    }
-
-    suspend fun getSafTreeUri(): String? {
-        return context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
-    }
+    // ===== SAF Storage =====
+    suspend fun getSafTreeUri(): String? = context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
     suspend fun setSafTreeUri(uri: String?) { context.dataStore.edit { if (uri != null) it[KEY_STORAGE_SAF_URI] = uri else it.remove(KEY_STORAGE_SAF_URI) } }
 
-    val storageMigrationDone: Flow<Boolean> = context.dataStore.data.map { it[KEY_STORAGE_MIGRATION_DONE] ?: false }
-    suspend fun setStorageMigrationDone(v: Boolean) { context.dataStore.edit { it[KEY_STORAGE_MIGRATION_DONE] = v } }
-
-    val firstLaunchDone: Flow<Boolean> = context.dataStore.data.map { it[KEY_FIRST_LAUNCH_DONE] ?: false }
-    suspend fun setFirstLaunchDone(v: Boolean) { context.dataStore.edit { it[KEY_FIRST_LAUNCH_DONE] = v } }
+    fun hasStorageLocationSync(): Boolean {
+        return try { runBlocking { getSafTreeUri() != null } } catch (e: Exception) { false }
+    }
 
     companion object {
         private val KEY_THEME = intPreferencesKey("theme_type")
@@ -82,9 +71,6 @@ class PreferencesManager(private val context: Context) {
         private val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         private val KEY_DOWNLOAD_MAX_CONCURRENT = intPreferencesKey("download_max_concurrent")
         private val KEY_DOWNLOAD_ON_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
-        private val KEY_STORAGE_TYPE = intPreferencesKey("storage_type")
         private val KEY_STORAGE_SAF_URI = stringPreferencesKey("storage_saf_uri")
-        private val KEY_STORAGE_MIGRATION_DONE = booleanPreferencesKey("storage_migration_done")
-        private val KEY_FIRST_LAUNCH_DONE = booleanPreferencesKey("first_launch_done")
     }
 }
