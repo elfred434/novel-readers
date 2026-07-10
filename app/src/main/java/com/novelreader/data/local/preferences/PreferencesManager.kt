@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -82,7 +83,7 @@ class PreferencesManager(private val context: Context) {
         private val KEY_DOWNLOAD_MAX_CONCURRENT = intPreferencesKey("download_max_concurrent")
         private val KEY_DOWNLOAD_ON_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
         private val KEY_STORAGE_TYPE = intPreferencesKey("storage_type")
-        private val KEY_STORAGE_SAF_URI = object : Preferences.Key<String> { override val name: String = "storage_saf_uri" }
+        private val KEY_STORAGE_SAF_URI = stringPreferencesKey("storage_saf_uri")
         private val KEY_STORAGE_MIGRATION_DONE = booleanPreferencesKey("storage_migration_done")
         private val KEY_FIRST_LAUNCH_DONE = booleanPreferencesKey("first_launch_done")
     }
