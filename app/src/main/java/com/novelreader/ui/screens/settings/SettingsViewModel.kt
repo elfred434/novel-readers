@@ -104,6 +104,14 @@ class SettingsViewModel @Inject constructor(
     fun setDownloadOnWifiOnly(e: Boolean) { viewModelScope.launch { prefs.setDownloadOnWifiOnly(e) } }
     fun retryFailedDownloads() { downloadManager.retryAllFailed() }
 
+    fun setSafStorage(uri: String) {
+        viewModelScope.launch {
+            prefs.setSafTreeUri(uri)
+            storageManager.setStorageType(com.novelreader.data.storage.StorageType.SAF)
+            loadStorageInfo()
+        }
+    }
+
     fun clearCache() {
         viewModelScope.launch {
             _uiState.update { it.copy(clearingCache = true) }

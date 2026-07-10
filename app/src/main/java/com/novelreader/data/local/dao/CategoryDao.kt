@@ -74,6 +74,14 @@ interface CategoryDao {
     """)
     fun getNovelsInCategory(categoryId: Long): Flow<List<NovelEntity>>
 
+    @Query("""
+        SELECT * FROM novels n
+        INNER JOIN novel_category_cross_ref r ON n.slug = r.novelSlug
+        WHERE r.categoryId = :categoryId
+        ORDER BY n.addedAt DESC
+    """)
+    suspend fun getNovelsInCategoryOnce(categoryId: Long): List<NovelEntity>
+
     // ===================== Transaction : bulk assign =====================
 
     /**
