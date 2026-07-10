@@ -1,5 +1,9 @@
 package com.novelreader.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,8 +25,11 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Wifi
@@ -49,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,6 +69,17 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val safLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            // Take persistable permission
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            viewModel.refreshStorageInfo()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -88,18 +107,15 @@ fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                         AppTheme.entries.forEachIndexed { i, t ->
                             val sel = uiState.themeType == i
-                            Box(
-                                Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
-                                    .background(if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable { viewModel.setThemeType(i) },
-                                contentAlignment = Alignment.Center
-                            ) { Text(t.displayName, style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)) }
+                            Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp)).background(if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { viewModel.setThemeType(i) }, contentAlignment = Alignment.Center) {
+                                Text(t.displayName, style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
                         }
                     }
                 }
             }
 
-            // Queue
+            // Downloads queue
             SectionCard {
                 Row(Modifier.fillMaxWidth().clickable { onDownloadsClick() }, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
@@ -130,8 +146,7 @@ fun SettingsScreen(
                         Icon(Icons.Default.Schedule, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
                         Column(Modifier.weight(1f)) { Text("Vérification auto", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("Toutes les ${uiState.updateIntervalHours}h", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
-                    Slider(value = uiState.updateIntervalHours.toFloat(), onValueChange = { viewModel.setUpdateInterval(it.toInt()) }, valueRange = 4f..48f, steps = 10,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant))
+                    Slider(value = uiState.updateIntervalHours.toFloat(), onValueChange = { viewModel.setUpdateInterval(it.toInt()) }, valueRange = 4f..48f, steps = 10, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant))
                 }
             }
 
@@ -144,6 +159,38 @@ fun SettingsScreen(
                 }
             }
 
+            // Storage section
+            SectionCard {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Stockage", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            val loc = if (uiState.storageType == 0) "Interne" else "Externe (SAF)"
+                            Text("$loc · ${uiState.downloadCountOnDisk} fichier(s) · ${uiState.storageUsed}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Button(
+                        onClick = { safLauncher.launch(null) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, null, modifier = Modifier.padding(end = 6.dp))
+                        Text("Changer l'emplacement")
+                    }
+                    Button(
+                        onClick = { viewModel.refreshStorageInfo() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, null, modifier = Modifier.padding(end = 6.dp))
+                        Text("Actualiser")
+                    }
+                }
+            }
+
             // Download settings
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,8 +199,7 @@ fun SettingsScreen(
                         Text("Téléchargements", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Simultané", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${uiState.downloadMaxConcurrent}") }
-                    Slider(value = uiState.downloadMaxConcurrent.toFloat(), onValueChange = { viewModel.setDownloadMaxConcurrent(it.toInt()) }, valueRange = 1f..5f, steps = 3,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant))
+                    Slider(value = uiState.downloadMaxConcurrent.toFloat(), onValueChange = { viewModel.setDownloadMaxConcurrent(it.toInt()) }, valueRange = 1f..5f, steps = 3, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Wifi, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Wi-Fi uniquement", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -166,12 +212,11 @@ fun SettingsScreen(
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
-                        Column(Modifier.weight(1f)) { Text("Cache", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("${uiState.cachedChapterCount} chapitre(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Icon(Icons.Default.DeleteSweep, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f)) { Text("Cache", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)); Text("${uiState.cachedChapterCount} chapitre(s) en cache", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                     Button(onClick = viewModel::clearCache, enabled = uiState.cachedChapterCount > 0 && !uiState.clearingCache,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                         Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.padding(end = 6.dp))
                         Text(if (uiState.clearingCache) "Suppression…" else "Vider le cache")
                     }
@@ -186,9 +231,5 @@ fun SettingsScreen(
 
 @Composable
 fun SectionCard(content: @Composable () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) { Box(Modifier.padding(16.dp)) { content() } }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) { Box(Modifier.padding(16.dp)) { content() } }
 }

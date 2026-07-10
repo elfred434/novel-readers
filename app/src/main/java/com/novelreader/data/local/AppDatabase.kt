@@ -14,25 +14,13 @@ import com.novelreader.data.local.entity.NovelCategoryCrossRef
 import com.novelreader.data.local.entity.NovelEntity
 
 /**
- * Base de données Room principale de l'application.
- *
- * ENTITÉS (conformes Section 4 du CDC) :
- * - NovelEntity : novels dans la bibliothèque de l'utilisateur
- * - ChapterEntity : chapitres d'un novel suivi
- * - ChapterContentEntity : cache local des chapitres téléchargés
- * - CategoryEntity : catégories personnalisées pour organiser la bibliothèque
- * - NovelCategoryCrossRef : table de jonction many-to-many novels ↔ catégories
+ * Base de données Room.
  *
  * VERSIONS :
- *   v1 (Phase 1) : NovelEntity, ChapterEntity, ChapterContentEntity
- *   v2 (Phase 2) : Ajout novelTitle dans ChapterEntity
- *   v3 (Phase 4) : Ajout CategoryEntity + NovelCategoryCrossRef
- *
- * @see NovelEntity
- * @see ChapterEntity
- * @see ChapterContentEntity
- * @see CategoryEntity
- * @see NovelCategoryCrossRef
+ *   v1 : NovelEntity, ChapterEntity, ChapterContentEntity
+ *   v2 : Ajout novelTitle dans ChapterEntity
+ *   v3 : Ajout CategoryEntity + NovelCategoryCrossRef
+ *   v4 : Ajout storageFolderName dans NovelEntity
  */
 @Database(
     entities = [
@@ -42,7 +30,7 @@ import com.novelreader.data.local.entity.NovelEntity
         CategoryEntity::class,
         NovelCategoryCrossRef::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

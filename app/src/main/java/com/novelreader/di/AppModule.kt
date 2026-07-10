@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.extension.ExtensionManager
+import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.local.AppDatabase
 import com.novelreader.data.local.dao.CategoryDao
 import com.novelreader.data.local.dao.ChapterContentDao
@@ -121,5 +122,14 @@ object AppModule {
     @Singleton
     fun providePreferencesManager(@ApplicationContext context: Context): PreferencesManager {
         return PreferencesManager(context)
+    }
+}
+
+    // ===================== Storage =====================
+
+    @Provides
+    @Singleton
+    fun provideStorageManager(@ApplicationContext context: Context, prefs: PreferencesManager): StorageManager {
+        return StorageManager(context, prefs)
     }
 }

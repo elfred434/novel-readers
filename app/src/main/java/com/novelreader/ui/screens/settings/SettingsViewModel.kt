@@ -6,12 +6,15 @@ import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.repository.NovelRepository
+import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -24,7 +27,10 @@ data class SettingsUiState(
     val clearingCache: Boolean = false,
     val activeDownloads: Int = 0,
     val failedDownloads: Int = 0,
-    val extensionCount: Int = 1
+    val extensionCount: Int = 1,
+    val storageType: Int = 0,
+    val storageUsed: String = "0 Mo",
+    val downloadCountOnDisk: Int = 0
 )
 
 @HiltViewModel
@@ -32,28 +38,20 @@ class SettingsViewModel @Inject constructor(
     private val prefs: PreferencesManager,
     private val repository: NovelRepository,
     private val downloadManager: DownloadManager,
-    private val extensionManager: ExtensionManager
+    private val extensionManager: ExtensionManager,
+    private val storageManager: StorageManager,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            prefs.themeType.collect { v -> _uiState.update { it.copy(themeType = v) } }
-        }
-        viewModelScope.launch {
-            prefs.updateIntervalHours.collect { v -> _uiState.update { it.copy(updateIntervalHours = v) } }
-        }
-        viewModelScope.launch {
-            prefs.notificationsEnabled.collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } }
-        }
-        viewModelScope.launch {
-            prefs.downloadMaxConcurrent.collect { v -> _uiState.update { it.copy(downloadMaxConcurrent = v) } }
-        }
-        viewModelScope.launch {
-            prefs.downloadOnWifiOnly.collect { v -> _uiState.update { it.copy(downloadOnWifiOnly = v) } }
-        }
+        viewModelScope.launch { prefs.themeType.collect { v -> _uiState.update { it.copy(themeType = v) } } }
+        viewModelScope.launch { prefs.updateIntervalHours.collect { v -> _uiState.update { it.copy(updateIntervalHours = v) } } }
+        viewModelScope.launch { prefs.notificationsEnabled.collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } } }
+        viewModelScope.launch { prefs.downloadMaxConcurrent.collect { v -> _uiState.update { it.copy(downloadMaxConcurrent = v) } } }
+        viewModelScope.launch { prefs.downloadOnWifiOnly.collect { v -> _uiState.update { it.copy(downloadOnWifiOnly = v) } } }
         viewModelScope.launch {
             extensionManager.sources.collect { sources ->
                 _uiState.update { it.copy(extensionCount = sources.size) }
@@ -71,6 +69,31 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(cachedChapterCount = repository.getCachedCount()) }
+        }
+        loadStorageInfo()
+    }
+
+    private fun loadStorageInfo() {
+        viewModelScope.launch {
+            val type = prefs.getStorageType()
+            val count = withContext(Dispatchers.IO) { storageManager.countDownloadedChapters() }
+            val bytes = withContext(Dispatchers.IO) { storageManager.getStorageSizeBytes() }
+            val sizeStr = when {
+                bytes < 1024 -> "$bytes o"
+                bytes < 1024 * 1024 -> "${bytes / 1024} Ko"
+                else -> "%.1f Mo".format(bytes.toDouble() / (1024 * 1024))
+            }
+            _uiState.update { it.copy(storageType = type, downloadCountOnDisk = count, storageUsed = sizeStr) }
+        }
+    }
+
+    fun refreshStorageInfo() { loadStorageInfo() }
+
+    suspend fun getStorageDisplayPath(): String {
+        val type = prefs.getStorageType()
+        return when (type) {
+            0 -> context.filesDir?.let { "${it}/novels" } ?: "Stockage interne"
+            else -> prefs.getSafTreeUri() ?: "Dossier externe"
         }
     }
 

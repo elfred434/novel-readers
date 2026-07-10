@@ -111,6 +111,7 @@ dependencies {
 
     // DataStore
     implementation(libs.datastore.preferences)
+    implementation(libs.documentfile)
 
     // WorkManager
     implementation(libs.work.runtime.ktx)

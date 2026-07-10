@@ -12,9 +12,12 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -23,12 +26,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.ui.screens.browse.BrowseScreen
 import com.novelreader.ui.screens.detail.DetailScreen
 import com.novelreader.ui.screens.downloads.DownloadsScreen
 import com.novelreader.ui.screens.extensions.ExtensionsScreen
 import com.novelreader.ui.screens.history.HistoryScreen
 import com.novelreader.ui.screens.library.LibraryScreen
+import com.novelreader.ui.screens.onboarding.OnboardingScreen
 import com.novelreader.ui.screens.reader.ReaderScreen
 import com.novelreader.ui.screens.settings.SettingsScreen
 import com.novelreader.ui.screens.updates.UpdatesScreen
@@ -40,7 +45,10 @@ fun NovelReaderNavigation() {
     val currentDestination = navBackStackEntry?.destination
 
     val bottomBarRoutes = Screen.bottomNavItems.map { it.route }
-    val showBottomBar = currentDestination?.route in bottomBarRoutes
+    val showBottomBar = currentDestination?.route in bottomBarRoutes && currentDestination?.route != Screen.Onboarding.route
+
+    // Determine start destination based on first launch
+    // This is handled by observing prefs inside the NavHost composable
 
     Scaffold(
         bottomBar = {
@@ -78,11 +86,37 @@ fun NovelReaderNavigation() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Library.route,
+            startDestination = "loading",
             modifier = Modifier.padding(innerPadding),
             enterTransition = { fadeIn(animationSpec = tween(250)) },
             exitTransition = { fadeOut(animationSpec = tween(250)) }
         ) {
+            composable("loading") {
+                // Vérifier si c'est le premier lancement
+                val prefs: PreferencesManager = hiltViewModel()
+                val firstLaunchDone by prefs.firstLaunchDone.collectAsState(initial = null)
+
+                if (firstLaunchDone != null) {
+                    if (firstLaunchDone == true) {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo("loading") { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(Screen.Onboarding.route) {
+                            popUpTo("loading") { inclusive = true }
+                        }
+                    }
+                }
+            }
+
+            composable(Screen.Onboarding.route) {
+                OnboardingScreen(onComplete = {
+                    navController.navigate(Screen.Library.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    }
+                })
+            }
+
             composable(Screen.Library.route) {
                 LibraryScreen(
                     onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) },
