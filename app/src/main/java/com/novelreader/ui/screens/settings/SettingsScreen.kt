@@ -208,6 +208,39 @@ fun SettingsScreen(
                 }
             }
 
+            // High speed mode
+            SectionCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.Wifi, null, tint = if (uiState.isOnWifi) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Mode Haute Vitesse", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            val status = when {
+                                !uiState.isOnline -> "Hors-ligne"
+                                uiState.isOnWifi && uiState.wifiHighDataMode -> "Wi-Fi · Turbo activé"
+                                uiState.isOnWifi && !uiState.wifiHighDataMode -> "Wi-Fi · Mode économique"
+                                else -> "Données mobiles"
+                            }
+                            Text(status, style = MaterialTheme.typography.bodySmall,
+                                color = if (uiState.isOnWifi && uiState.wifiHighDataMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = uiState.wifiHighDataMode, onCheckedChange = { viewModel.toggleWifiHighDataMode() },
+                            enabled = uiState.isOnline,
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                disabledThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), disabledTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(
+                            if (uiState.isOnWifi) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)))
+                        Text(
+                            if (uiState.wifiHighDataMode && uiState.isOnWifi) "Jusqu'à 5 téléchargements simultanés · préchargement des chapitres"
+                            else if (uiState.isOnWifi) "${uiState.downloadMaxConcurrent} téléchargement(s) simultané(s)"
+                            else "Actif uniquement sur Wi-Fi",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
             // Cache
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

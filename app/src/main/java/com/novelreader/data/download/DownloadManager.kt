@@ -1,6 +1,7 @@
 package com.novelreader.data.download
 
 import com.novelreader.data.model.ChapterContent
+import com.novelreader.data.network.NetworkStateManager
 import com.novelreader.data.repository.NovelRepository
 import com.novelreader.data.storage.StorageManager
 import kotlinx.coroutines.CoroutineScope
@@ -9,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -40,14 +42,46 @@ data class DownloadItem(
 @Singleton
 class DownloadManager @Inject constructor(
     private val repository: NovelRepository,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val networkManager: NetworkStateManager
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _queue = MutableStateFlow<List<DownloadItem>>(emptyList())
     val queue: StateFlow<List<DownloadItem>> = _queue.asStateFlow()
 
+    /** Parallélisme configuré par l'utilisateur (mode économie). */
+    var userMaxConcurrent = 2
+
+    /** Parallélisme actif (augmenté sur WiFi si mode haute vitesse activé). */
     var maxConcurrent = 2
+        private set
+
+    /**
+     * En mode WiFi + haute vitesse : jusqu'à 5 téléchargements simultanés
+     * Sinon : valeur utilisateur (2 par défaut)
+     */
+    private fun updateMaxConcurrent(onWifi: Boolean, highDataEnabled: Boolean) {
+        maxConcurrent = if (onWifi && highDataEnabled) 5 else userMaxConcurrent
+        processQueue()
+    }
+
+    var highDataModeEnabled: Boolean = true
+        set(value) {
+            field = value
+            scope.launch {
+                val onWifi = networkManager.isOnWifi.first()
+                updateMaxConcurrent(onWifi, value)
+            }
+        }
+
+    init {
+        scope.launch {
+            networkManager.isOnWifi.collect { onWifi ->
+                updateMaxConcurrent(onWifi, highDataModeEnabled)
+            }
+        }
+    }
     var maxRetries = 3
     private var activeCount = 0
 

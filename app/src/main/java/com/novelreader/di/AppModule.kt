@@ -53,8 +53,8 @@ object AppModule {
         ExtensionManager().apply { registerSource(novelFranceSource) }
 
     @Provides @Singleton
-    fun provideDownloadManager(repository: NovelRepository, storageManager: StorageManager): DownloadManager =
-        DownloadManager(repository, storageManager)
+    fun provideDownloadManager(repository: NovelRepository, storageManager: StorageManager, networkManager: com.novelreader.data.network.NetworkStateManager): DownloadManager =
+        DownloadManager(repository, storageManager, networkManager)
 
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
@@ -74,6 +74,10 @@ object AppModule {
 
     @Provides @Singleton
     fun providePreferencesManager(@ApplicationContext context: Context): PreferencesManager = PreferencesManager(context)
+
+    @Provides @Singleton
+    fun provideNetworkStateManager(@ApplicationContext context: Context): com.novelreader.data.network.NetworkStateManager =
+        com.novelreader.data.network.NetworkStateManager(context)
 
     // ===================== Storage =====================
 

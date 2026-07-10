@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.StoredDownload
 import com.novelreader.data.model.ChapterContent
 import com.novelreader.data.model.Paragraph
+import com.novelreader.data.network.NetworkStateManager
 import com.novelreader.data.repository.NovelRepository
 import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,14 +34,17 @@ data class ReaderUiState(
     val showSettings: Boolean = false,
     val scrollPosition: Int = 0,
     val isMarkedRead: Boolean = false,
-    val isOffline: Boolean = false
+    val isOffline: Boolean = false,
+    val isPrefetchingNext: Boolean = false,
+    val isOnWifi: Boolean = false
 )
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: NovelRepository,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val networkManager: NetworkStateManager
 ) : ViewModel() {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -50,6 +55,13 @@ class ReaderViewModel @Inject constructor(
         val encoded = savedStateHandle.get<String>("chapterUrlEncoded") ?: ""
         val chapterUrl = if (encoded.isNotBlank()) java.net.URLDecoder.decode(encoded, "UTF-8") else ""
         if (chapterUrl.isNotBlank()) loadChapter(chapterUrl)
+
+        // Observer le WiFi pour l'UI
+        viewModelScope.launch {
+            networkManager.isOnWifi.collect { wifi ->
+                _uiState.update { it.copy(isOnWifi = wifi) }
+            }
+        }
     }
 
     fun loadChapter(chapterUrl: String) {
@@ -76,6 +88,7 @@ class ReaderViewModel @Inject constructor(
                         chapterNumber = chapterNumber, hasPrevChapter = fromFile.prevChapterUrl != null,
                         hasNextChapter = fromFile.nextChapterUrl != null, isOffline = true) }
                     markRead(slug, chapterNumber)
+                    prefetchNextOnWifi(fromFile.nextChapterUrl)
                     return@launch
                 } catch (_: Exception) {}
             }
@@ -87,6 +100,7 @@ class ReaderViewModel @Inject constructor(
                     chapterNumber = chapterNumber, hasPrevChapter = fromDb.prevChapterUrl != null,
                     hasNextChapter = fromDb.nextChapterUrl != null, isOffline = true) }
                 markRead(slug, chapterNumber)
+                prefetchNextOnWifi(fromDb.nextChapterUrl)
                 return@launch
             }
 
@@ -97,8 +111,45 @@ class ReaderViewModel @Inject constructor(
                     chapterNumber = chapterNumber, hasPrevChapter = content.prevChapterUrl != null,
                     hasNextChapter = content.nextChapterUrl != null, isOffline = false) }
                 markRead(slug, chapterNumber)
+                prefetchNextOnWifi(content.nextChapterUrl)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = "Connexion nécessaire. Télécharge le chapitre d'abord.") }
+            }
+        }
+    }
+
+    /**
+     * Précharge le chapitre suivant en arrière-plan si on est en WiFi.
+     * Le contenu est mis en cache DB (Room) pour un accès instantané.
+     */
+    private fun prefetchNextOnWifi(nextChapterUrl: String?) {
+        if (nextChapterUrl == null) return
+        viewModelScope.launch {
+            val onWifi = networkManager.isOnWifi.first()
+            if (!onWifi) return@launch
+
+            _uiState.update { it.copy(isPrefetchingNext = true) }
+            try {
+                // Vérifier si déjà en cache
+                val slug = extractNovelSlug(nextChapterUrl)
+                val chapterNumber = extractChapterNumber(nextChapterUrl)
+                val chapterId = NovelRepository.chapterId(slug, chapterNumber)
+
+                // Déjà sur le disque ou en cache ?
+                val onDisk = withContext(Dispatchers.IO) { storageManager.isChapterDownloaded(slug, chapterNumber) }
+                val inDb = repository.getCachedChapter(chapterId)
+                if (onDisk || inDb != null) {
+                    _uiState.update { it.copy(isPrefetchingNext = false) }
+                    return@launch
+                }
+
+                // Précharger et mettre en cache DB
+                val content = repository.getChapterContent(nextChapterUrl)
+                repository.downloadChapter(chapterId, content)
+            } catch (_: Exception) {
+                // Silence — le préchargement est un bonus, pas bloquant
+            } finally {
+                _uiState.update { it.copy(isPrefetchingNext = false) }
             }
         }
     }

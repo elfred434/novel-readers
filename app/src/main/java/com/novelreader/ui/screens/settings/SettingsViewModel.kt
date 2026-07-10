@@ -3,8 +3,10 @@ package com.novelreader.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.preferences.PreferencesManager
+import com.novelreader.data.network.NetworkStateManager
 import com.novelreader.data.repository.NovelRepository
 import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,6 +26,7 @@ data class SettingsUiState(
     val notificationsEnabled: Boolean = true,
     val downloadMaxConcurrent: Int = 2,
     val downloadOnWifiOnly: Boolean = true,
+    val wifiHighDataMode: Boolean = true,
     val cachedChapterCount: Int = 0,
     val clearingCache: Boolean = false,
     val activeDownloads: Int = 0,
@@ -30,7 +34,9 @@ data class SettingsUiState(
     val extensionCount: Int = 1,
     val hasStorageLocation: Boolean = false,
     val storageUsed: String = "0 Mo",
-    val downloadCountOnDisk: Int = 0
+    val downloadCountOnDisk: Int = 0,
+    val isOnline: Boolean = false,
+    val isOnWifi: Boolean = false
 )
 
 @HiltViewModel
@@ -39,7 +45,8 @@ class SettingsViewModel @Inject constructor(
     private val repository: NovelRepository,
     private val downloadManager: DownloadManager,
     private val extensionManager: ExtensionManager,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val networkManager: NetworkStateManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -51,16 +58,33 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.notificationsEnabled.collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } } }
         viewModelScope.launch { prefs.downloadMaxConcurrent.collect { v -> _uiState.update { it.copy(downloadMaxConcurrent = v) } } }
         viewModelScope.launch { prefs.downloadOnWifiOnly.collect { v -> _uiState.update { it.copy(downloadOnWifiOnly = v) } } }
+        viewModelScope.launch { prefs.wifiHighDataMode.collect { v ->
+            _uiState.update { it.copy(wifiHighDataMode = v) }
+            downloadManager.highDataModeEnabled = v
+        } }
         viewModelScope.launch { extensionManager.sources.collect { sources -> _uiState.update { it.copy(extensionCount = sources.size) } } }
         viewModelScope.launch {
             downloadManager.queue.collect { queue ->
                 _uiState.update { it.copy(
-                    activeDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.DOWNLOADING || q.status == com.novelreader.data.download.DownloadStatus.QUEUED },
-                    failedDownloads = queue.count { q -> q.status == com.novelreader.data.download.DownloadStatus.FAILED }
+                    activeDownloads = queue.count { q -> q.status == DownloadStatus.DOWNLOADING || q.status == DownloadStatus.QUEUED },
+                    failedDownloads = queue.count { q -> q.status == DownloadStatus.FAILED }
                 )}
             }
         }
         viewModelScope.launch { _uiState.update { it.copy(cachedChapterCount = repository.getCachedCount()) } }
+
+        // Observer l'état réseau
+        viewModelScope.launch {
+            networkManager.isOnline.collect { online ->
+                _uiState.update { it.copy(isOnline = online) }
+            }
+        }
+        viewModelScope.launch {
+            networkManager.isOnWifi.collect { wifi ->
+                _uiState.update { it.copy(isOnWifi = wifi) }
+            }
+        }
+
         loadStorageInfo()
     }
 
@@ -87,8 +111,22 @@ class SettingsViewModel @Inject constructor(
     fun setThemeType(type: Int) { viewModelScope.launch { prefs.setThemeType(type) } }
     fun setUpdateInterval(h: Int) { viewModelScope.launch { prefs.setUpdateIntervalHours(h) } }
     fun toggleNotifications() { viewModelScope.launch { prefs.setNotificationsEnabled(!_uiState.value.notificationsEnabled) } }
-    fun setDownloadMaxConcurrent(n: Int) { viewModelScope.launch { prefs.setDownloadMaxConcurrent(n); downloadManager.maxConcurrent = n } }
+    fun setDownloadMaxConcurrent(n: Int) {
+        viewModelScope.launch {
+            prefs.setDownloadMaxConcurrent(n)
+            downloadManager.userMaxConcurrent = n
+            // Recalcule immédiat
+            val onWifi = networkManager.isCurrentlyOnWifi()
+            downloadManager.highDataModeEnabled = _uiState.value.wifiHighDataMode
+        }
+    }
     fun setDownloadOnWifiOnly(e: Boolean) { viewModelScope.launch { prefs.setDownloadOnWifiOnly(e) } }
+    fun toggleWifiHighDataMode() {
+        viewModelScope.launch {
+            val newVal = !_uiState.value.wifiHighDataMode
+            prefs.setWifiHighDataMode(newVal)
+        }
+    }
     fun retryFailedDownloads() { downloadManager.retryAllFailed() }
 
     fun clearCache() {

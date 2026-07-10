@@ -51,6 +51,9 @@ class PreferencesManager(private val context: Context) {
     val downloadOnWifiOnly: Flow<Boolean> = context.dataStore.data.map { it[KEY_DOWNLOAD_ON_WIFI_ONLY] ?: true }
     suspend fun setDownloadOnWifiOnly(e: Boolean) { context.dataStore.edit { it[KEY_DOWNLOAD_ON_WIFI_ONLY] = e } }
 
+    val wifiHighDataMode: Flow<Boolean> = context.dataStore.data.map { it[KEY_WIFI_HIGH_DATA] ?: true }
+    suspend fun setWifiHighDataMode(e: Boolean) { context.dataStore.edit { it[KEY_WIFI_HIGH_DATA] = e } }
+
     // ===== SAF Storage =====
     suspend fun getSafTreeUri(): String? = context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
     suspend fun setSafTreeUri(uri: String?) { context.dataStore.edit { if (uri != null) it[KEY_STORAGE_SAF_URI] = uri else it.remove(KEY_STORAGE_SAF_URI) } }
@@ -71,6 +74,7 @@ class PreferencesManager(private val context: Context) {
         private val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         private val KEY_DOWNLOAD_MAX_CONCURRENT = intPreferencesKey("download_max_concurrent")
         private val KEY_DOWNLOAD_ON_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+        private val KEY_WIFI_HIGH_DATA = booleanPreferencesKey("wifi_high_data_mode")
         private val KEY_STORAGE_SAF_URI = stringPreferencesKey("storage_saf_uri")
     }
 }

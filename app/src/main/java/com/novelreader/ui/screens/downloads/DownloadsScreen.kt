@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,37 +64,46 @@ fun DownloadsScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
 
-            if (uiState.items.isEmpty() && uiState.downloadedFromFiles.isEmpty()) {
-                EmptyView(message = "Aucun téléchargement.\nTélécharge des chapitres depuis le détail d'un novel.")
+            val activeItems = uiState.items.filter {
+                it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.DOWNLOADING ||
+                it.status == DownloadStatus.FAILED
+            }
+
+            val hasActive = activeItems.isNotEmpty()
+            val hasFiles = uiState.downloadedFromFiles.isNotEmpty()
+
+            if (!hasActive && !hasFiles) {
+                EmptyView(message = "Aucun téléchargement en cours.\nTélécharge des chapitres depuis le détail d'un novel.")
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // SECTION : Téléchargements en cours/actifs
-                    if (uiState.items.isNotEmpty()) {
+                    // SECTION : Téléchargements en cours
+                    if (hasActive) {
                         item(key = "section_active") {
                             Text(
                                 text = "En cours (${uiState.activeCount + uiState.queuedCount})",
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
-                        items(items = uiState.items, key = { "queue_${it.chapterId}" }) { item ->
+                        items(items = activeItems, key = { "queue_${it.chapterId}" }) { item ->
                             QueueItemCard(item = item, onRetry = { viewModel.retry(item.chapterId) }, onCancel = { viewModel.cancel(item.chapterId) })
                         }
-                        if (uiState.downloadedFromFiles.isNotEmpty()) {
+                        if (hasFiles) {
                             item(key = "divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
                         }
                     }
 
-                    // SECTION : Fichiers persistants (survit au redémarrage)
-                    if (uiState.downloadedFromFiles.isNotEmpty()) {
+                    // SECTION : Fichiers persistants
+                    if (hasFiles) {
                         item(key = "section_files") {
                             Text(
                                 text = "Chapitres sauvegardés (${uiState.downloadedFromFiles.sumOf { it.chapterCount }})",
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
