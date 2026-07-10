@@ -115,7 +115,7 @@ class DownloadManager @Inject constructor(
                 nextChapterUrl = content.nextChapterUrl
             )
             val jsonStr = json.encodeToString(data)
-            storageManager.saveChapterFile(item.novelSlug, item.chapterNumber, jsonStr, item.novelTitle)
+            storageManager.saveChapterFile(item.novelSlug, item.chapterNumber, jsonStr)
 
             _queue.update { current -> current.map { if (it.chapterId == item.chapterId) it.copy(status = DownloadStatus.COMPLETED, progress = 1f) else it } }
         } catch (e: Exception) {
