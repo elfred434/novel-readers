@@ -2,6 +2,7 @@ package com.novelreader.data.download
 
 import com.novelreader.data.model.ChapterContent
 import com.novelreader.data.repository.NovelRepository
+import com.novelreader.data.storage.StorageManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,6 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,15 +33,16 @@ data class DownloadItem(
 )
 
 /**
- * Gestionnaire de téléchargements avec queue, priorité, retry.
- * Sauvegarde les chapitres en fichiers JSON dans le stockage interne
- * via ChapterFileManager (survit au cache, accessible hors-ligne).
+ * Gestionnaire de téléchargements.
+ * Sauvegarde les chapitres dans le dossier choisi via [StorageManager].
+ * Supporte stockage interne (filesDir) ET externe (SAF).
  */
 @Singleton
 class DownloadManager @Inject constructor(
     private val repository: NovelRepository,
-    private val chapterFileManager: ChapterFileManager
+    private val storageManager: StorageManager
 ) {
+    private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _queue = MutableStateFlow<List<DownloadItem>>(emptyList())
     val queue: StateFlow<List<DownloadItem>> = _queue.asStateFlow()
@@ -96,14 +101,21 @@ class DownloadManager @Inject constructor(
         try {
             _queue.update { current -> current.map { if (it.chapterId == item.chapterId) it.copy(progress = 0.1f) else it } }
             val content: ChapterContent = repository.getChapterContent(item.url)
-
             _queue.update { current -> current.map { if (it.chapterId == item.chapterId) it.copy(progress = 0.5f) else it } }
 
-            // Sauvegarde DB (pour metadata et historique)
+            // 1. Sauvegarder dans la DB (métadonnées + historique)
             repository.downloadChapter(item.chapterId, content)
 
-            // Sauvegarde FICHIER (pour accès hors-ligne robuste)
-            chapterFileManager.saveChapter(item.novelSlug, item.chapterNumber, content)
+            // 2. Sauvegarder dans le STOCKAGE UTILISATEUR (interne ou SAF)
+            val data = StoredDownload(
+                chapterTitle = content.chapterTitle,
+                novelTitle = content.novelTitle,
+                paragraphs = content.paragraphs.map { StoredDownloadPara(it.index, it.htmlContent) },
+                prevChapterUrl = content.prevChapterUrl,
+                nextChapterUrl = content.nextChapterUrl
+            )
+            val jsonStr = json.encodeToString(data)
+            storageManager.saveChapterFile(item.novelSlug, item.chapterNumber, jsonStr, item.novelTitle)
 
             _queue.update { current -> current.map { if (it.chapterId == item.chapterId) it.copy(status = DownloadStatus.COMPLETED, progress = 1f) else it } }
         } catch (e: Exception) {
@@ -123,7 +135,7 @@ class DownloadManager @Inject constructor(
         _queue.value = emptyList()
         scope.launch {
             repository.clearCache()
-            chapterFileManager.deleteAll()
+            storageManager.deleteAllFiles()
         }
     }
 
@@ -131,3 +143,15 @@ class DownloadManager @Inject constructor(
     val failedDownloads: Int get() = _queue.value.count { it.status == DownloadStatus.FAILED }
     val queuedDownloads: Int get() = _queue.value.count { it.status == DownloadStatus.QUEUED }
 }
+
+@Serializable
+data class StoredDownload(
+    val chapterTitle: String,
+    val novelTitle: String,
+    val paragraphs: List<StoredDownloadPara>,
+    val prevChapterUrl: String? = null,
+    val nextChapterUrl: String? = null
+)
+
+@Serializable
+data class StoredDownloadPara(val index: Int, val htmlContent: String)

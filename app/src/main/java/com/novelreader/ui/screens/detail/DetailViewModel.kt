@@ -3,8 +3,8 @@ package com.novelreader.ui.screens.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
 import com.novelreader.data.model.NovelStatus
@@ -36,7 +36,7 @@ class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: NovelRepository,
     private val downloadManager: DownloadManager,
-    private val chapterFileManager: ChapterFileManager
+    private val storageManager: StorageManager
 ) : ViewModel() {
 
     private val slug: String = savedStateHandle["slug"] ?: ""
@@ -63,7 +63,7 @@ class DetailViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             // 1. Toujours charger la liste des téléchargés (hors-ligne d'abord)
             val downloadedNums = withContext(Dispatchers.IO) {
-                chapterFileManager.getDownloadedChapters(slug).toSet()
+                storageManager.getDownloadedChapterNumbers(slug).toSet()
             }
 
             try {
@@ -114,7 +114,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             if (_uiState.value.isInLibrary) {
                 repository.removeNovelFromLibrary(slug)
-                chapterFileManager.deleteNovel(slug)
+                storageManager.deleteNovelFiles(slug)
                 _uiState.update { it.copy(isInLibrary = false, downloadedChapters = emptySet()) }
             } else {
                 repository.addNovelToLibrary(novel)

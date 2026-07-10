@@ -304,6 +304,27 @@ class StorageManager @Inject constructor(
     }
 
     /**
+     * Supprime TOUS les fichiers téléchargés (tous novels).
+     */
+    suspend fun deleteAllFiles(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            when (getStorageType()) {
+                StorageType.INTERNAL -> {
+                    val base = File(context.filesDir, BASE_FOLDER)
+                    if (base.exists()) base.deleteRecursively().also { base.mkdirs() }
+                    else true
+                }
+                StorageType.SAF -> {
+                    val base = getBaseDir() ?: return@withContext false
+                    var success = true
+                    base.listFiles().forEach { if (!it.delete()) success = false }
+                    success
+                }
+            }
+        } catch (e: Exception) { false }
+    }
+
+    /**
      * Affiche la taille approximative du stockage utilisé.
      */
     suspend fun getStorageSizeBytes(): Long = withContext(Dispatchers.IO) {

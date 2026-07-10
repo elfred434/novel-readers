@@ -2,7 +2,6 @@ package com.novelreader.di
 
 import android.content.Context
 import androidx.room.Room
-import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.storage.StorageManager
@@ -54,11 +53,8 @@ object AppModule {
         ExtensionManager().apply { registerSource(novelFranceSource) }
 
     @Provides @Singleton
-    fun provideChapterFileManager(@ApplicationContext context: Context): ChapterFileManager = ChapterFileManager(context)
-
-    @Provides @Singleton
-    fun provideDownloadManager(repository: NovelRepository, chapterFileManager: ChapterFileManager): DownloadManager =
-        DownloadManager(repository, chapterFileManager)
+    fun provideDownloadManager(repository: NovelRepository, storageManager: StorageManager): DownloadManager =
+        DownloadManager(repository, storageManager)
 
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =

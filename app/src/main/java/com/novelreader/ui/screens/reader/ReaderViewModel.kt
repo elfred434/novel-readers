@@ -3,17 +3,20 @@ package com.novelreader.ui.screens.reader
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.novelreader.data.download.ChapterFileManager
+import com.novelreader.data.download.StoredDownload
 import com.novelreader.data.model.ChapterContent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.novelreader.data.model.Paragraph
 import com.novelreader.data.repository.NovelRepository
+import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 data class ReaderUiState(
@@ -36,9 +39,10 @@ data class ReaderUiState(
 class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: NovelRepository,
-    private val chapterFileManager: ChapterFileManager
+    private val storageManager: StorageManager
 ) : ViewModel() {
 
+    private val json = Json { ignoreUnknownKeys = true }
     private val _uiState = MutableStateFlow(ReaderUiState())
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
 
@@ -48,10 +52,6 @@ class ReaderViewModel @Inject constructor(
         if (chapterUrl.isNotBlank()) loadChapter(chapterUrl)
     }
 
-    /**
-     * Charge un chapitre : FICHIER → CACHE DB → RÉSEAU
-     * Garantit la lecture hors-ligne.
-     */
     fun loadChapter(chapterUrl: String) {
         val slug = extractNovelSlug(chapterUrl)
         val chapterNumber = extractChapterNumber(chapterUrl)
@@ -60,51 +60,51 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, currentChapterUrl = chapterUrl) }
 
-            // 1. Essayer le fichier (stockage persistant)
-            val fromFile = kotlinx.coroutines.withContext(Dispatchers.IO) { chapterFileManager.loadChapter(slug, chapterNumber) }
-            if (fromFile != null) {
-                val hasPrev = fromFile.prevChapterUrl != null
-                val hasNext = fromFile.nextChapterUrl != null
-                _uiState.update {
-                    it.copy(chapterContent = fromFile, isLoading = false, novelSlug = slug,
-                        chapterNumber = chapterNumber, hasPrevChapter = hasPrev, hasNextChapter = hasNext, isOffline = true)
-                }
-                markRead(slug, chapterNumber)
-                return@launch
+            // 1. Essayer le fichier (stockage persistant — interne ou SAF)
+            val jsonStr = withContext(Dispatchers.IO) { storageManager.loadChapterFile(slug, chapterNumber) }
+            if (jsonStr != null) {
+                try {
+                    val stored = json.decodeFromString<StoredDownload>(jsonStr)
+                    val fromFile = ChapterContent(
+                        chapterTitle = stored.chapterTitle,
+                        novelTitle = stored.novelTitle,
+                        paragraphs = stored.paragraphs.map { Paragraph(it.index, it.htmlContent) },
+                        prevChapterUrl = stored.prevChapterUrl,
+                        nextChapterUrl = stored.nextChapterUrl
+                    )
+                    _uiState.update { it.copy(chapterContent = fromFile, isLoading = false, novelSlug = slug,
+                        chapterNumber = chapterNumber, hasPrevChapter = fromFile.prevChapterUrl != null,
+                        hasNextChapter = fromFile.nextChapterUrl != null, isOffline = true) }
+                    markRead(slug, chapterNumber)
+                    return@launch
+                } catch (_: Exception) {}
             }
 
-            // 2. Essayer le cache DB (téléchargé mais fichier supprimé)
+            // 2. Cache DB
             val fromDb = repository.getCachedChapter(chapterId)
             if (fromDb != null) {
-                _uiState.update {
-                    it.copy(chapterContent = fromDb, isLoading = false, novelSlug = slug,
-                        chapterNumber = chapterNumber, hasPrevChapter = fromDb.prevChapterUrl != null,
-                        hasNextChapter = fromDb.nextChapterUrl != null, isOffline = true)
-                }
+                _uiState.update { it.copy(chapterContent = fromDb, isLoading = false, novelSlug = slug,
+                    chapterNumber = chapterNumber, hasPrevChapter = fromDb.prevChapterUrl != null,
+                    hasNextChapter = fromDb.nextChapterUrl != null, isOffline = true) }
                 markRead(slug, chapterNumber)
                 return@launch
             }
 
-            // 3. Charger depuis le réseau
+            // 3. Réseau
             try {
                 val content = repository.getChapterContent(chapterUrl)
-                _uiState.update {
-                    it.copy(chapterContent = content, isLoading = false, novelSlug = slug,
-                        chapterNumber = chapterNumber, hasPrevChapter = content.prevChapterUrl != null,
-                        hasNextChapter = content.nextChapterUrl != null, isOffline = false)
-                }
+                _uiState.update { it.copy(chapterContent = content, isLoading = false, novelSlug = slug,
+                    chapterNumber = chapterNumber, hasPrevChapter = content.prevChapterUrl != null,
+                    hasNextChapter = content.nextChapterUrl != null, isOffline = false) }
                 markRead(slug, chapterNumber)
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = "Impossible de charger le chapitre. Vérifie ta connexion ou télécharge-le d'abord.") }
+                _uiState.update { it.copy(isLoading = false, error = "Connexion nécessaire. Télécharge le chapitre d'abord.") }
             }
         }
     }
 
     private suspend fun markRead(slug: String, chapterNumber: Int) {
-        try {
-            repository.markChapterAsRead(NovelRepository.chapterId(slug, chapterNumber))
-            _uiState.update { it.copy(isMarkedRead = true) }
-        } catch (_: Exception) {}
+        try { repository.markChapterAsRead(NovelRepository.chapterId(slug, chapterNumber)); _uiState.update { it.copy(isMarkedRead = true) } } catch (_: Exception) {}
     }
 
     fun goToNextChapter() { _uiState.value.chapterContent?.nextChapterUrl?.let { loadChapter(it) } }
@@ -121,15 +121,9 @@ class ReaderViewModel @Inject constructor(
 
     suspend fun persistScrollPosition() {
         val s = _uiState.value
-        if (s.scrollPosition > 0 && s.novelSlug.isNotBlank()) {
-            repository.saveScrollPosition(NovelRepository.chapterId(s.novelSlug, s.chapterNumber), s.scrollPosition)
-        }
+        if (s.scrollPosition > 0 && s.novelSlug.isNotBlank()) repository.saveScrollPosition(NovelRepository.chapterId(s.novelSlug, s.chapterNumber), s.scrollPosition)
     }
 
-    private fun extractNovelSlug(url: String): String {
-        return Regex("/novel/([^/]+)/").find(url)?.groupValues?.getOrNull(1) ?: ""
-    }
-    private fun extractChapterNumber(url: String): Int {
-        return Regex("chapter-(\\d+)(?:/)?$").find(url)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
-    }
+    private fun extractNovelSlug(url: String) = Regex("/novel/([^/]+)/").find(url)?.groupValues?.getOrNull(1) ?: ""
+    private fun extractChapterNumber(url: String) = Regex("chapter-(\\d+)(?:/)?$").find(url)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
 }

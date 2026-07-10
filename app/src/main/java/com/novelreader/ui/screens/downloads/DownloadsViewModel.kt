@@ -2,10 +2,10 @@ package com.novelreader.ui.screens.downloads
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.novelreader.data.download.ChapterFileManager
 import com.novelreader.data.download.DownloadItem
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.download.DownloadStatus
+import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,39 +35,33 @@ data class DownloadedNovelInfo(
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
-    private val chapterFileManager: ChapterFileManager
+    private val storageManager: StorageManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
 
     init {
-        // Queue en mémoire (téléchargements actifs/en cours)
         viewModelScope.launch {
             downloadManager.queue.collect { items ->
-                _uiState.update {
-                    it.copy(
-                        items = items,
-                        activeCount = items.count { i -> i.status == DownloadStatus.DOWNLOADING },
-                        queuedCount = items.count { i -> i.status == DownloadStatus.QUEUED },
-                        completedCount = items.count { i -> i.status == DownloadStatus.COMPLETED },
-                        failedCount = items.count { i -> i.status == DownloadStatus.FAILED }
-                    )
-                }
+                _uiState.update { it.copy(items = items,
+                    activeCount = items.count { i -> i.status == DownloadStatus.DOWNLOADING },
+                    queuedCount = items.count { i -> i.status == DownloadStatus.QUEUED },
+                    completedCount = items.count { i -> i.status == DownloadStatus.COMPLETED },
+                    failedCount = items.count { i -> i.status == DownloadStatus.FAILED }) }
             }
         }
 
-        // Fichiers persistants (survit au redémarrage)
         viewModelScope.launch {
             val infos = withContext(Dispatchers.IO) { scanDownloadedFiles() }
             _uiState.update { it.copy(downloadedFromFiles = infos) }
         }
     }
 
-    private fun scanDownloadedFiles(): List<DownloadedNovelInfo> {
-        val slugs = chapterFileManager.getDownloadedNovels()
+    private suspend fun scanDownloadedFiles(): List<DownloadedNovelInfo> {
+        val slugs = storageManager.getDownloadedNovelSlugs()
         return slugs.map { slug ->
-            val chapters = chapterFileManager.getDownloadedChapters(slug)
+            val chapters = storageManager.getDownloadedChapterNumbers(slug)
             DownloadedNovelInfo(
                 novelSlug = slug,
                 novelTitle = slug.replace("-", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } },
