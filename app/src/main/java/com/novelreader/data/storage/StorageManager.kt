@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.novelreader.data.local.preferences.PreferencesManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -18,13 +19,10 @@ import javax.inject.Singleton
  *   1. **Interne (auto-créé)** — utilise java.io.File dans context.filesDir
  *      Créé automatiquement au premier lancement, aucune action utilisateur requise.
  *   2. **SAF (Storage Access Framework)** — l'utilisateur choisit un dossier
- *      via le sélecteur Android. La permission est persistée via takePersistableUriPermission().
+ *      via le sélecteur Android.
  *
  * Structure (identique dans les deux modes) :
  *   {base}/novels/{slug_sanitized}/{chapterNumber}.json
- *
- * @property context Contexte Android
- * @property prefs Stocke l'URI du dossier racine
  */
 @Singleton
 class StorageManager @Inject constructor(
@@ -38,14 +36,10 @@ class StorageManager @Inject constructor(
 
     // ── Initialisation automatique ───────────────────────
 
-    /**
-     * Crée le dossier de stockage automatiquement dans filesDir
-     * si aucun emplacement SAF n'est configuré.
-     * Appelé au premier lancement depuis NovelReaderApp.onCreate().
-     */
     suspend fun autoCreateStorageLocation(): Boolean = withContext(Dispatchers.IO) {
-        if (prefs.getSafTreeUri() != null) return@withContext true // déjà configuré en SAF
-        if (prefs.internalStoragePath.first() != null) return@withContext true // déjà initialisé
+        if (prefs.getSafTreeUri() != null) return@withContext true
+        val internalPath = prefs.internalStoragePath.first()
+        if (internalPath != null) return@withContext true
 
         val dir = File(context.filesDir, "NovelReader/$BASE_FOLDER")
         try {
@@ -57,19 +51,16 @@ class StorageManager @Inject constructor(
         } catch (e: Exception) { false }
     }
 
-    /** Vrai si l'emplacement de stockage est un dossier interne auto-créé. */
-    suspend fun isUsingInternalStorage(): Boolean =
+    suspend fun isUsingInternalStorage(): Boolean = withContext(Dispatchers.IO) {
         prefs.getSafTreeUri() == null && prefs.internalStoragePath.first() != null
+    }
 
-    /** Vrai si l'emplacement de stockage a été choisi via SAF. */
     suspend fun isUsingSaf(): Boolean = prefs.getSafTreeUri() != null
 
-    /** Vrai si un emplacement de stockage est disponible. */
-    suspend fun hasStorageLocation(): Boolean = prefs.hasAnyStorage()
+    suspend fun hasStorageLocation(): Boolean = withContext(Dispatchers.IO) {
+        prefs.getSafTreeUri() != null || prefs.internalStoragePath.first() != null
+    }
 
-    fun hasStorageLocationSync(): Boolean = prefs.hasAnyStorageSync()
-
-    /** Retourne le chemin lisible du dossier de stockage actuel. */
     suspend fun getStorageDisplayPath(): String = withContext(Dispatchers.IO) {
         val safUri = prefs.getSafTreeUri()
         if (safUri != null) {
@@ -79,7 +70,7 @@ class StorageManager @Inject constructor(
         }
     }
 
-    // ── Dossier de base ────────────────────────────────────
+    // ── Résolution du dossier de base ─────────────────────
 
     private suspend fun getBaseFile(): File? = withContext(Dispatchers.IO) {
         val path = prefs.internalStoragePath.first() ?: return@withContext null
@@ -94,27 +85,13 @@ class StorageManager @Inject constructor(
         doc?.findFile(BASE_FOLDER) ?: doc?.createDirectory(BASE_FOLDER)
     }
 
-    // ── Dossier d'un novel ─────────────────────────────────
-
-    private fun novelFileDir(slug: String): File = File(
-        getBaseFile() ?: File(context.filesDir, "NovelReader/$BASE_FOLDER"),
-        sanitizeFolderName(slug)
-    )
-
-    private suspend fun getNovelDir(slug: String): DocumentFile? = withContext(Dispatchers.IO) {
-        val base = getBaseDir() ?: return@withContext null
-        val folderName = sanitizeFolderName(slug)
-        base.findFile(folderName) ?: base.createDirectory(folderName)
-    }
-
-    // ── Mode interne (java.io.File) ────────────────────────
+    // ── Dispatch SAF vs Interne ──────────────────────────
 
     private suspend fun <T> withStorage(
         safBlock: suspend (DocumentFile) -> T?,
         fileBlock: suspend (File) -> T?
     ): T? = withContext(Dispatchers.IO) {
-        val safUri = prefs.getSafTreeUri()
-        if (safUri != null) {
+        if (prefs.getSafTreeUri() != null) {
             val base = getBaseDir() ?: return@withContext null
             safBlock(base)
         } else {
@@ -128,12 +105,14 @@ class StorageManager @Inject constructor(
         safBlock: suspend (DocumentFile) -> T?,
         fileBlock: suspend (File) -> T?
     ): T? = withContext(Dispatchers.IO) {
-        val safUri = prefs.getSafTreeUri()
-        if (safUri != null) {
-            val dir = getNovelDir(slug) ?: return@withContext null
+        if (prefs.getSafTreeUri() != null) {
+            val base = getBaseDir() ?: return@withContext null
+            val folderName = sanitizeFolderName(slug)
+            val dir = base.findFile(folderName) ?: base.createDirectory(folderName) ?: return@withContext null
             safBlock(dir)
         } else {
-            val dir = novelFileDir(slug)
+            val base = getBaseFile() ?: return@withContext null
+            val dir = File(base, sanitizeFolderName(slug))
             dir.mkdirs()
             if (!dir.exists()) return@withContext null
             fileBlock(dir)
@@ -142,77 +121,73 @@ class StorageManager @Inject constructor(
 
     // ── Opérations fichier ─────────────────────────────────
 
-    suspend fun saveChapterFile(
-        novelSlug: String, chapterNumber: Int, jsonContent: String
-    ): Boolean = withNovelStorage(novelSlug,
-        safBlock = { dir ->
-            val fileName = "$chapterNumber.json"
-            dir.findFile(fileName)?.delete()
-            val newFile = dir.createFile("application/json", fileName.substringBeforeLast("."))
-            newFile?.let { file ->
-                context.contentResolver.openOutputStream(file.uri)?.use { stream ->
-                    stream.write(jsonContent.toByteArray(Charsets.UTF_8)); true
+    suspend fun saveChapterFile(novelSlug: String, chapterNumber: Int, jsonContent: String): Boolean =
+        withNovelStorage(novelSlug,
+            safBlock = { dir ->
+                val fileName = "$chapterNumber.json"
+                dir.findFile(fileName)?.delete()
+                val newFile = dir.createFile("application/json", fileName.substringBeforeLast("."))
+                newFile?.let { file ->
+                    context.contentResolver.openOutputStream(file.uri)?.use { stream ->
+                        stream.write(jsonContent.toByteArray(Charsets.UTF_8)); true
+                    }
+                } ?: false
+            },
+            fileBlock = { dir ->
+                try {
+                    File(dir, "$chapterNumber.json").writeText(jsonContent, Charsets.UTF_8)
+                    true
+                } catch (e: Exception) { false }
+            }
+        ) ?: false
+
+    suspend fun loadChapterFile(novelSlug: String, chapterNumber: Int): String? =
+        withNovelStorage(novelSlug,
+            safBlock = { dir ->
+                val file = dir.findFile("$chapterNumber.json") ?: return@withNovelStorage null
+                context.contentResolver.openInputStream(file.uri)?.use { it.bufferedReader().readText() }
+            },
+            fileBlock = { dir ->
+                try {
+                    val f = File(dir, "$chapterNumber.json")
+                    if (f.exists()) f.readText(Charsets.UTF_8) else null
+                } catch (e: Exception) { null }
+            }
+        )
+
+    suspend fun isChapterDownloaded(novelSlug: String, chapterNumber: Int): Boolean =
+        withNovelStorage(novelSlug,
+            safBlock = { dir -> dir.findFile("$chapterNumber.json") != null },
+            fileBlock = { dir -> File(dir, "$chapterNumber.json").exists() }
+        ) ?: false
+
+    suspend fun deleteChapterFile(novelSlug: String, chapterNumber: Int): Boolean =
+        withNovelStorage(novelSlug,
+            safBlock = { dir -> dir.findFile("$chapterNumber.json")?.delete() ?: false },
+            fileBlock = { dir -> File(dir, "$chapterNumber.json").delete() }
+        ) ?: false
+
+    suspend fun deleteMultipleChapterFiles(novelSlug: String, chapterNumbers: List<Int>): Int =
+        withNovelStorage(novelSlug,
+            safBlock = { dir ->
+                var deleted = 0
+                for (num in chapterNumbers) {
+                    if (dir.findFile("$num.json")?.delete() == true) deleted++
                 }
-            } ?: false
-        },
-        fileBlock = { dir ->
-            try {
-                val file = File(dir, "$chapterNumber.json")
-                file.writeText(jsonContent, Charsets.UTF_8)
-                true
-            } catch (e: Exception) { false }
-        }
-    ) ?: false
-
-    suspend fun loadChapterFile(novelSlug: String, chapterNumber: Int): String? = withNovelStorage(novelSlug,
-        safBlock = { dir ->
-            val file = dir.findFile("$chapterNumber.json") ?: return@withNovelStorage null
-            context.contentResolver.openInputStream(file.uri)?.use { it.bufferedReader().readText() }
-        },
-        fileBlock = { dir ->
-            try {
-                val file = File(dir, "$chapterNumber.json")
-                if (file.exists()) file.readText(Charsets.UTF_8) else null
-            } catch (e: Exception) { null }
-        }
-    )
-
-    suspend fun isChapterDownloaded(novelSlug: String, chapterNumber: Int): Boolean = withNovelStorage(novelSlug,
-        safBlock = { dir -> dir.findFile("$chapterNumber.json") != null },
-        fileBlock = { dir -> File(dir, "$chapterNumber.json").exists() }
-    ) ?: false
-
-    suspend fun deleteChapterFile(novelSlug: String, chapterNumber: Int): Boolean = withNovelStorage(novelSlug,
-        safBlock = { dir -> dir.findFile("$chapterNumber.json")?.delete() ?: false },
-        fileBlock = { dir -> File(dir, "$chapterNumber.json").delete() }
-    ) ?: false
-
-    suspend fun deleteMultipleChapterFiles(novelSlug: String, chapterNumbers: List<Int>): Int = withNovelStorage(novelSlug,
-        safBlock = { dir ->
-            var deleted = 0
-            for (num in chapterNumbers) {
-                if (dir.findFile("$num.json")?.delete() == true) deleted++
+                deleted
+            },
+            fileBlock = { dir ->
+                var deleted = 0
+                for (num in chapterNumbers) {
+                    if (File(dir, "$num.json").delete()) deleted++
+                }
+                deleted
             }
-            deleted
-        },
-        fileBlock = { dir ->
-            var deleted = 0
-            for (num in chapterNumbers) {
-                val f = File(dir, "$num.json")
-                if (f.delete()) deleted++
-            }
-            deleted
-        }
-    ) ?: 0
+        ) ?: 0
 
     suspend fun deleteNovelFiles(novelSlug: String): Boolean = withStorage(
-        safBlock = { base ->
-            base.findFile(sanitizeFolderName(novelSlug))?.delete() ?: false
-        },
-        fileBlock = { base ->
-            val dir = File(base, sanitizeFolderName(novelSlug))
-            dir.deleteRecursively()
-        }
+        safBlock = { base -> base.findFile(sanitizeFolderName(novelSlug))?.delete() ?: false },
+        fileBlock = { base -> File(base, sanitizeFolderName(novelSlug)).deleteRecursively(); true }
     ) ?: false
 
     // ── Compteurs ─────────────────────────────────────────
