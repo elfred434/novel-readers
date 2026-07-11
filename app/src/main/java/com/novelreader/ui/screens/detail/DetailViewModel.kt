@@ -1,9 +1,11 @@
 package com.novelreader.ui.screens.detail
 
+import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.download.DownloadService
 import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.model.ChapterPreview
@@ -39,7 +41,8 @@ class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: NovelRepository,
     private val downloadManager: DownloadManager,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val app: Application
 ) : ViewModel() {
 
     private val slug: String = savedStateHandle["slug"] ?: ""
@@ -91,7 +94,8 @@ class DetailViewModel @Inject constructor(
                 val chapters = repository.getChapterList(slug)
                 val inLibrary = repository.isNovelInLibrary(slug)
                 _uiState.update { it.copy(novel = novel, chapters = chapters, isLoading = false,
-                    isInLibrary = inLibrary, isOffline = false, downloadedChapters = downloadedNums) }
+                    isInLibrary = inLibrary, isOffline = false, downloadedChapters = downloadedNums,
+                    lastReadChapterNumber = repository.getLocalNovelBySlug(slug)?.lastChapterRead) }
             } catch (e: Exception) {
                 try {
                     val localNovel = repository.getLocalNovelBySlug(slug)
@@ -140,6 +144,7 @@ class DetailViewModel @Inject constructor(
             novelSlug = slug, chapterNumber = chapter.chapterNumber, url = chapter.url,
             novelTitle = novel.title, chapterTitle = chapter.title
         )
+        DownloadService.start(app)
     }
 
     fun downloadAllChapters() {
@@ -151,6 +156,7 @@ class DetailViewModel @Inject constructor(
                 novelTitle = novel.title, chapterTitle = ch.title
             )
         })
+        DownloadService.start(app)
     }
 
     fun markChapterAsUnread(chapter: ChapterPreview) {

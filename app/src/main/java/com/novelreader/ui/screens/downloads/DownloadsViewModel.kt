@@ -1,9 +1,11 @@
 package com.novelreader.ui.screens.downloads
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.DownloadItem
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.download.DownloadService
 import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +37,8 @@ data class DownloadedNovelInfo(
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val app: Application
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DownloadsUiState())
@@ -78,7 +81,13 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
-    fun retryAll() = downloadManager.retryAllFailed()
-    fun retry(chapterId: String) = downloadManager.retry(chapterId)
+    fun retryAll() {
+        downloadManager.retryAllFailed()
+        DownloadService.start(app)
+    }
+    fun retry(chapterId: String) {
+        downloadManager.retry(chapterId)
+        DownloadService.start(app)
+    }
     fun cancel(chapterId: String) = downloadManager.cancel(chapterId)
 }
