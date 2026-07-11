@@ -275,7 +275,7 @@ fun SettingsScreen(
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.SystemUpdate, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.CloudDownload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
                         Column(Modifier.weight(1f)) {
                             Text("Mise à jour", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
 
