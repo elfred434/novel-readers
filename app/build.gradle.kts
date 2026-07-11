@@ -19,7 +19,7 @@ android {
         // VersionCode auto-incrémenté via GitHub Actions ou nombre de commits Git
         val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
         val commitCount = try {
-            "git rev-list --count HEAD".run { Runtime.getRuntime().exec(this).inputStream.bufferedReader().readLine()?.toIntOrNull() }
+            Runtime.getRuntime().exec("git rev-list --count HEAD").inputStream.bufferedReader().readLine()?.toIntOrNull()
         } catch (_: Exception) { null }
 
         versionCode = runNumber ?: commitCount ?: 1
@@ -61,7 +61,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
+    
+    @Suppress("DEPRECATION")
     kotlinOptions {
         jvmTarget = "17"
     }

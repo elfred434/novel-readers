@@ -41,8 +41,8 @@ class NovelRepository @Inject constructor(
     // ===================== Opérations réseau =====================
 
     /** Parcourir les novels depuis la source. */
-    suspend fun browseNovels(page: Int, genre: String? = null): List<Novel> {
-        return source.getBrowseList(page = page, genre = genre)
+    suspend fun browseNovels(page: Int, genre: String? = null, status: String? = null, sort: String? = null, order: String? = null): List<Novel> {
+        return source.getBrowseList(page = page, genre = genre, status = status, sort = sort, order = order)
     }
 
     /** Rechercher des novels. */

@@ -5,6 +5,8 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RoomWarnings
+import androidx.room.SuppressWarnings
 import androidx.room.Transaction
 import androidx.room.Update
 import com.novelreader.data.local.entity.CategoryEntity
@@ -66,6 +68,7 @@ interface CategoryDao {
     """)
     suspend fun getCategoryIdsForNovel(novelSlug: String): List<Long>
 
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("""
         SELECT * FROM novels n
         INNER JOIN novel_category_cross_ref r ON n.slug = r.novelSlug
@@ -74,6 +77,7 @@ interface CategoryDao {
     """)
     fun getNovelsInCategory(categoryId: Long): Flow<List<NovelEntity>>
 
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("""
         SELECT * FROM novels n
         INNER JOIN novel_category_cross_ref r ON n.slug = r.novelSlug

@@ -9,13 +9,24 @@ data class Novel(
     val slug: String,
     val title: String,
     val author: String,
+    val translatorName: String? = null,
     val coverImageUrl: String,
     val synopsis: String,
     val status: NovelStatus,
     val rating: Double,
+    val ratingCount: Int = 0,
+    val views: Int = 0,
+    val bookmarkCount: Int = 0,
+    val type: String = "",
+    val year: Int? = null,
+    val alternativeTitles: String = "",
     val genres: List<String>,
     val chapterCount: Int,
-    val sourceUrl: String
+    val sourceUrl: String,
+    val firstChapterSlug: String? = null,
+    val allTimeRank: Int? = null,
+    val totalViews: Int? = null,
+    val tags: List<String> = emptyList()
 )
 
 enum class NovelStatus {
@@ -31,3 +42,11 @@ enum class NovelStatus {
         }
     }
 }
+
+/**
+ * Info d'un genre avec son slug pour les filtres.
+ */
+data class GenreInfo(
+    val name: String,
+    val slug: String
+)

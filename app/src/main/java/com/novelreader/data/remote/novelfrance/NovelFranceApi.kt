@@ -14,13 +14,10 @@ import okhttp3.Request
 /**
  * Client HTTP pour l'API REST de NovelFrance.
  *
- * Endpoints API découverts expérimentalement (juillet 2026) :
- *   GET /api/novels?page=N&limit=20&search=X&genre=X&status=X&sort=X
+ * Endpoints API :
+ *   GET /api/novels?page=N&limit=20&search=X&genre=X&status=X&sort=X&order=X&type=X
  *   GET /api/novels/{slug}
  *   GET /api/chapters/{slug}?skip=N&take=N&order=desc
- *
- * L'API /api/chapters/{slug} utilise des cookies de session. Fonctionne
- * avec un client HTTP standard (OkHttp) qui maintient les cookies.
  */
 class NovelFranceApi(
     private val client: OkHttpClient
@@ -36,7 +33,8 @@ class NovelFranceApi(
     suspend fun getNovels(
         page: Int = 1, limit: Int = 20,
         search: String? = null, genre: String? = null,
-        status: String? = null, sort: String? = null
+        status: String? = null, sort: String? = null,
+        order: String? = null, type: String? = null
     ): List<Novel> = withContext(Dispatchers.IO) {
         val url = buildUrl("/api/novels") {
             put("page", page.toString())
@@ -45,6 +43,8 @@ class NovelFranceApi(
             genre?.let { put("genre", it) }
             status?.let { put("status", it) }
             sort?.let { put("sort", it) }
+            order?.let { put("order", it) }
+            type?.let { put("type", it) }
         }
         val response = executeGet(url)
         json.decodeFromString<BrowseResponse>(response).novels.map { it.toDomainModel() }
@@ -57,7 +57,6 @@ class NovelFranceApi(
 
     /**
      * Récupère TOUS les chapitres d'un novel via pagination.
-     * L'API limite à 100 chapitres par appel, donc on itère.
      */
     suspend fun getChaptersPaginated(slug: String): List<ChapterPreview> = withContext(Dispatchers.IO) {
         val allChapters = mutableListOf<ChapterPreview>()
@@ -77,7 +76,8 @@ class NovelFranceApi(
                         chapterNumber = raw.chapterNumber,
                         title = raw.title ?: "Chapitre ${raw.chapterNumber}",
                         url = "$BASE_URL/novel/$slug/${raw.slug ?: "chapter-${raw.chapterNumber}"}",
-                        publishedAt = raw.createdAt
+                        publishedAt = raw.createdAt,
+                        wordCount = raw.wordCount
                     )
                 )
             }
@@ -116,21 +116,36 @@ class NovelFranceApi(
     data class ApiGenre(val id: String, val name: String, val slug: String)
 
     @Serializable
-    data class ApiCount(val chapters: Int)
+    data class ApiCount(val chapters: Int? = 0, val ratings: Int? = 0, val bookmarks: Int? = 0)
+
+    @Serializable
+    data class FirstChapterSlug(val slug: String? = null)
+
+    @Serializable
+    data class ApiTag(val id: String? = null, val name: String? = null, val slug: String? = null)
 
     @Serializable
     data class ApiNovel(
         val id: String, val title: String, val slug: String,
         val description: String? = null, @SerialName("coverImage") val coverImage: String? = null,
         val author: String? = null, val status: String? = null, val rating: Double? = null,
+        val ratingCount: Int? = null, val views: Int? = null, val bookmarkCount: Int? = null,
+        val type: String? = null, val year: Int? = null,
+        @SerialName("alternativeTitles") val alternativeTitles: String? = null,
+        @SerialName("translatorName") val translatorName: String? = null,
         val genres: List<ApiGenre>? = null, @SerialName("_count") val count: ApiCount? = null
     ) {
         fun toDomainModel(): Novel = Novel(
             id = id, slug = slug, title = title,
             author = author ?: "Inconnu",
+            translatorName = translatorName,
             coverImageUrl = if (coverImage != null) "https://novelfrance.fr$coverImage" else "",
             synopsis = description ?: "", status = NovelStatus.fromString(status ?: ""),
-            rating = rating ?: 0.0, genres = genres?.map { it.name } ?: emptyList(),
+            rating = rating ?: 0.0, ratingCount = ratingCount ?: 0,
+            views = views ?: 0, bookmarkCount = bookmarkCount ?: 0,
+            type = type ?: "", year = year,
+            alternativeTitles = alternativeTitles ?: "",
+            genres = genres?.map { it.name } ?: emptyList(),
             chapterCount = count?.chapters ?: 0,
             sourceUrl = "https://novelfrance.fr/novel/$slug"
         )
@@ -141,16 +156,36 @@ class NovelFranceApi(
         val id: String, val title: String, val slug: String,
         val description: String? = null, @SerialName("coverImage") val coverImage: String? = null,
         val author: String? = null, val status: String? = null, val rating: Double? = null,
+        val ratingCount: Int? = null, val views: Int? = null,
+        val bookmarkCount: Int? = null, val type: String? = null,
+        val year: Int? = null,
+        @SerialName("alternativeTitles") val alternativeTitles: String? = null,
+        @SerialName("translatorName") val translatorName: String? = null,
+        @SerialName("firstChapter") val firstChapter: FirstChapterSlug? = null,
+        val allTimeRank: Int? = null,
+        val pageViews: Int? = null,
+        val chapterViews: Int? = null,
+        val totalViews: Int? = null,
+        val tags: List<ApiTag>? = null,
         val genres: List<ApiGenre>? = null, @SerialName("_count") val count: ApiCount? = null
     ) {
         fun toDomainModel(): Novel = Novel(
             id = id, slug = slug, title = title,
             author = author ?: "Inconnu",
+            translatorName = translatorName,
             coverImageUrl = if (coverImage != null) "https://novelfrance.fr$coverImage" else "",
             synopsis = description ?: "", status = NovelStatus.fromString(status ?: ""),
-            rating = rating ?: 0.0, genres = genres?.map { it.name } ?: emptyList(),
+            rating = rating ?: 0.0, ratingCount = ratingCount ?: 0,
+            views = views ?: 0, bookmarkCount = bookmarkCount ?: 0,
+            type = type ?: "", year = year,
+            alternativeTitles = alternativeTitles ?: "",
+            genres = genres?.map { it.name } ?: emptyList(),
             chapterCount = count?.chapters ?: 0,
-            sourceUrl = "https://novelfrance.fr/novel/$slug"
+            sourceUrl = "https://novelfrance.fr/novel/$slug",
+            firstChapterSlug = firstChapter?.slug,
+            allTimeRank = allTimeRank,
+            totalViews = totalViews ?: pageViews,
+            tags = tags?.mapNotNull { it.name } ?: emptyList()
         )
     }
 
@@ -170,6 +205,7 @@ class NovelFranceApi(
         val chapterNumber: Int,
         val title: String? = null,
         val slug: String? = null,
-        val createdAt: String? = null
+        val createdAt: String? = null,
+        val wordCount: Int? = null
     )
 }

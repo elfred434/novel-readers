@@ -40,8 +40,8 @@ class NovelFranceSource @JvmOverloads constructor(
         return api.getNovels(page = page, limit = 20, search = query)
     }
 
-    override suspend fun getBrowseList(page: Int, genre: String?, status: String?): List<Novel> {
-        return api.getNovels(page = page, limit = 20, genre = genre, status = status)
+    override suspend fun getBrowseList(page: Int, genre: String?, status: String?, sort: String?, order: String?): List<Novel> {
+        return api.getNovels(page = page, limit = 20, genre = genre, status = status, sort = sort, order = order)
     }
 
     override suspend fun getNovelDetails(novelSlug: String): Novel {

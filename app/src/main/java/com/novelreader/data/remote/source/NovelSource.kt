@@ -41,7 +41,7 @@ interface NovelSource {
     suspend fun search(query: String, page: Int): List<Novel>
 
     /** Parcourir le catalogue paginé */
-    suspend fun getBrowseList(page: Int, genre: String? = null, status: String? = null): List<Novel>
+    suspend fun getBrowseList(page: Int, genre: String? = null, status: String? = null, sort: String? = null, order: String? = null): List<Novel>
 
     /** Détails complets d'un novel */
     suspend fun getNovelDetails(novelSlug: String): Novel

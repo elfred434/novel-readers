@@ -32,6 +32,8 @@ fun NovelGridItem(
     onLongClick: () -> Unit = {},
     unreadCount: Int = 0,
     isDownloaded: Boolean = false,
+    ratingCount: Int = 0,
+    views: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -70,7 +72,7 @@ fun NovelGridItem(
                         }
                     }
 
-                    // Badge note
+                    // Badge note avec compteur de votes (en bas à gauche)
                     if (rating > 0) {
                         Box(
                             modifier = Modifier
@@ -86,7 +88,24 @@ fun NovelGridItem(
                         }
                     }
 
-                    // Badge téléchargé
+                    // Badge vues (en bas à droite)
+                    if (views > 0 && rating == 0.0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
+                                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                formatViews(views),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White),
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+
+                    // Badge téléchargé (en haut à droite)
                     if (isDownloaded) {
                         Box(
                             modifier = Modifier
@@ -108,10 +127,48 @@ fun NovelGridItem(
                         color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        author, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
+                    if (ratingCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("★", fontSize = 10.sp, color = RatingGold)
+                            Text(
+                                "%.1f".format(rating),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
+                                fontSize = 11.sp
+                            )
+                            Text(
+                                "($ratingCount)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                            if (views > 0) {
+                                Text(
+                                    "·",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
+                                Text(
+                                    formatViews(views),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    } else if (views > 0) {
+                        Text(
+                            formatViews(views),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    } else {
+                        Text(
+                            author, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -144,4 +201,12 @@ fun NovelGridItem(novel: NovelEntity, onClick: () -> Unit, modifier: Modifier = 
 @Composable
 fun NovelGridItem(novel: Novel, onClick: () -> Unit, modifier: Modifier = Modifier) =
     NovelGridItem(coverUrl = novel.coverImageUrl, title = novel.title, author = novel.author,
-        status = novel.status, rating = novel.rating, onClick = onClick, modifier = modifier)
+        status = novel.status, rating = novel.rating,
+        ratingCount = novel.ratingCount, views = novel.views,
+        onClick = onClick, modifier = modifier)
+
+private fun formatViews(views: Int): String = when {
+    views >= 1_000_000 -> "${views / 1_000_000}M"
+    views >= 1_000 -> "${views / 1_000}k"
+    else -> "$views"
+}

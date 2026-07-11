@@ -11,7 +11,8 @@ data class ChapterPreview(
     val title: String,
     val url: String,
     val publishedAt: String? = null,
-    val novelTitle: String? = null  // Utile pour le flux "derniers mises à jour"
+    val novelTitle: String? = null,  // Utile pour le flux "derniers mises à jour"
+    val wordCount: Int? = null       // Nombre de mots pour temps de lecture estimé
 )
 
 /**

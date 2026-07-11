@@ -11,6 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +65,7 @@ fun LibraryScreen(
                 actions = {
                     IconButton(onClick = viewModel::toggleViewMode) {
                         Icon(
-                            if (uiState.viewMode == ViewMode.GRID) Icons.Default.ViewList else Icons.Default.GridView,
+                            if (uiState.viewMode == ViewMode.GRID) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                             "Vue",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
@@ -517,7 +520,7 @@ private fun NovelContextMenu(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(
-                        Icons.Default.DriveFileMove,
+                        Icons.AutoMirrored.Filled.DriveFileMove,
                         null,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurface

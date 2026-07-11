@@ -74,6 +74,7 @@ fun DetailScreen(
             else -> {
                 val novel = uiState.novel!!
                 LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize().padding(padding)) {
+                    // ── HEADER ──
                     item(key = "header") {
                         Column(Modifier.fillMaxWidth()) {
                             Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
@@ -87,34 +88,106 @@ fun DetailScreen(
                                         if (novel.coverImageUrl.isNotBlank()) AsyncImage(model = novel.coverImageUrl, contentDescription = novel.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         else Text(novel.title.take(2).uppercase(), style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                                     }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        // Titre
                                         Text(novel.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, maxLines = 3, overflow = TextOverflow.Ellipsis)
+
+                                        // Auteur
                                         Text(novel.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                                        // Traducteur (P2)
+                                        if (novel.translatorName != null) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Translate, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Traduit par ${novel.translatorName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                                            }
+                                        }
+
+                                        // Status + Note
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             StatusChip(status = novel.status)
-                                            if (novel.rating > 0) RatingBadge(rating = novel.rating)
-                                        }
-                                        Text("${novel.chapterCount} chapitres · ${downloaded.size} téléchargés", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            novel.genres.take(3).forEach { g ->
-                                                Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)) {
-                                                    Text(g, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                            if (novel.rating > 0) {
+                                                RatingBadge(rating = novel.rating)
+                                                if (novel.ratingCount > 0) {
+                                                    Text("(${novel.ratingCount})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                             }
                                         }
-                                        Spacer(Modifier.height(6.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            val isInLib = uiState.isInLibrary
-                                            FilledTonalButton(onClick = viewModel::toggleLibrary, shape = RoundedCornerShape(10.dp), modifier = Modifier.height(36.dp),
-                                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = if (isInLib) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary, contentColor = if (isInLib) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary)) {
-                                                Icon(if (isInLib) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, null, modifier = Modifier.size(16.dp))
-                                                Spacer(Modifier.width(5.dp))
-                                                Text(if (isInLib) "Suivi" else "Suivre", style = MaterialTheme.typography.labelLarge)
+
+                                        // Type + Année + Classement (P3)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            if (novel.type.isNotBlank()) {
+                                                Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) {
+                                                    Text(novel.type.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 9.sp),
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                                                }
                                             }
-                                            FilledTonalButton(onClick = viewModel::downloadAllChapters, shape = RoundedCornerShape(10.dp), modifier = Modifier.height(36.dp),
+                                            if (novel.year != null && novel.year > 0) {
+                                                Text("${novel.year}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            if (novel.allTimeRank != null && novel.allTimeRank > 0) {
+                                                Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)) {
+                                                    Text("#${novel.allTimeRank}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                        color = MaterialTheme.colorScheme.tertiary,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                                                }
+                                            }
+                                        }
+
+                                        // Chapitres + téléchargés + vues totales (P3)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("${novel.chapterCount} chapitres · ${downloaded.size} téléchargés", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            if (novel.totalViews != null && novel.totalViews > 0) {
+                                                Text("${formatViews(novel.totalViews)} vues", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                            }
+                                        }
+
+                                        // Genres + Tags (P3)
+                                        val allLabels = novel.genres + novel.tags.filter { it !in novel.genres }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            allLabels.take(4).forEach { label ->
+                                                val isTag = label in novel.tags && label !in novel.genres
+                                                Surface(shape = RoundedCornerShape(6.dp),
+                                                    color = if (isTag) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)) {
+                                                    Text(label, style = MaterialTheme.typography.labelSmall,
+                                                        color = if (isTag) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                                }
+                                            }
+                                            if (allLabels.size > 4) {
+                                                Text("+${allLabels.size - 4}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                    modifier = Modifier.padding(start = 2.dp, top = 4.dp))
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(6.dp))
+
+                                        // Boutons
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            val isInLib = uiState.isInLibrary
+                                            FilledTonalButton(onClick = viewModel::toggleLibrary, shape = RoundedCornerShape(10.dp), modifier = Modifier.height(34.dp),
+                                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = if (isInLib) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary, contentColor = if (isInLib) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary)) {
+                                                Icon(if (isInLib) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, null, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(if (isInLib) "Suivi" else "Suivre", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                            FilledTonalButton(onClick = viewModel::downloadAllChapters, shape = RoundedCornerShape(10.dp), modifier = Modifier.height(34.dp),
                                                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                                                Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
-                                                Spacer(Modifier.width(5.dp)); Text("Télécharger", style = MaterialTheme.typography.labelLarge)
+                                                Icon(Icons.Default.Download, null, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Télécharger", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                            // Bouton Premier chapitre (P2)
+                                            if (novel.firstChapterSlug != null && uiState.chapters.isNotEmpty()) {
+                                                FilledTonalButton(onClick = { onChapterClick(uiState.chapters.first().url) }, shape = RoundedCornerShape(10.dp), modifier = Modifier.height(34.dp),
+                                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))) {
+                                                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("Lire", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                                }
                                             }
                                         }
                                     }
@@ -123,6 +196,19 @@ fun DetailScreen(
                         }
                     }
 
+                    // Titre alternatif (P2)
+                    if (novel.alternativeTitles.isNotBlank()) {
+                        item(key = "alt_title") {
+                            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(Icons.Default.Translate, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                    Text("Titre original : ${novel.alternativeTitles}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                }
+                            }
+                        }
+                    }
+
+                    // Synopsis
                     if (novel.synopsis.isNotBlank()) {
                         item(key = "synopsis") {
                             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -133,6 +219,7 @@ fun DetailScreen(
                         }
                     }
 
+                    // Chapitres
                     item(key = "ch_title") {
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,6 +239,7 @@ fun DetailScreen(
                             chapterNumber = ch.chapterNumber, title = ch.title,
                             isDownloaded = isDl, isDownloading = isDling, isSelected = isSelected,
                             isSelectionMode = uiState.isSelectionMode, isLastRead = isLastRead,
+                            wordCount = ch.wordCount,
                             onClick = {
                                 if (uiState.isSelectionMode) viewModel.toggleChapterSelection(ch.chapterNumber)
                                 else onChapterClick(ch.url)
@@ -169,51 +257,34 @@ fun DetailScreen(
         }
     }
 
-    // Dialog suppression individuelle
+    // Dialogs (inchangés)
     deleteTarget?.let { chapterNumber ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp),
             title = { Text("Supprimer le téléchargement ?", fontWeight = FontWeight.Bold) },
             text = { Text("Le chapitre #$chapterNumber sera supprimé.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            confirmButton = {
-                Button(onClick = { viewModel.deleteDownloadedChapter(chapterNumber); deleteTarget = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(10.dp)) { Text("Supprimer") }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
+            confirmButton = { Button(onClick = { viewModel.deleteDownloadedChapter(chapterNumber); deleteTarget = null },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp)) { Text("Supprimer") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         )
     }
 
-    // Dialog suppression groupée
     if (showBulkDeleteDialog) {
         val count = uiState.selectedChapters.size
         AlertDialog(
             onDismissRequest = { showBulkDeleteDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp),
             title = { Text("Supprimer $count téléchargements ?", fontWeight = FontWeight.Bold) },
             text = {
                 val sorted = uiState.selectedChapters.sorted()
                 val preview = if (sorted.size <= 5) sorted.joinToString(", ") { "#$it" }
                     else sorted.take(5).joinToString(", ") { "#$it" } + "… et ${sorted.size - 5} autres"
-                Column {
-                    Text("Ces chapitres seront supprimés :", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Text(preview, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                }
+                Column { Text("Ces chapitres seront supprimés :", color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(8.dp)); Text(preview, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) }
             },
-            confirmButton = {
-                Button(onClick = { viewModel.deleteSelectedChapters(); showBulkDeleteDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(10.dp)) { Text("Tout supprimer") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBulkDeleteDialog = false }) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
+            confirmButton = { Button(onClick = { viewModel.deleteSelectedChapters(); showBulkDeleteDialog = false },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp)) { Text("Tout supprimer") } },
+            dismissButton = { TextButton(onClick = { showBulkDeleteDialog = false }) { Text("Annuler", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         )
     }
 }
@@ -224,6 +295,7 @@ private fun ChapterCard(
     chapterNumber: Int, title: String,
     isDownloaded: Boolean, isDownloading: Boolean, isSelected: Boolean,
     isSelectionMode: Boolean, isLastRead: Boolean,
+    wordCount: Int? = null,
     onClick: () -> Unit, onLongClick: () -> Unit,
     onDownload: () -> Unit, onDelete: () -> Unit, onMarkUnread: () -> Unit
 ) {
@@ -251,6 +323,11 @@ private fun ChapterCard(
                         }
                     }
                 }
+                // Temps de lecture estimé (P2)
+                if (wordCount != null && wordCount > 0 && !isSelectionMode) {
+                    val minutes = (wordCount / 200f).toInt().coerceAtLeast(1)
+                    Text("$minutes min · $wordCount mots", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 9.sp)
+                }
             }
             if (!isSelectionMode) {
                 when {
@@ -264,4 +341,10 @@ private fun ChapterCard(
             }
         }
     }
+}
+
+private fun formatViews(views: Int): String = when {
+    views >= 1_000_000 -> "${views / 1_000_000}M"
+    views >= 1_000 -> "${views / 1_000}k"
+    else -> "$views"
 }
