@@ -7,6 +7,11 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Permissions explicites pour créer des Releases
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -93,6 +98,5 @@ jobs:
             3. Autorise l'installation d'applications tierces si demandé
             4. Profite de NovelReader !
           files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
