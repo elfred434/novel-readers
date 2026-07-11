@@ -1,14 +1,9 @@
 package com.novelreader.ui.screens.library
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +28,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.ui.components.*
-import com.novelreader.ui.theme.Primary
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -106,7 +99,7 @@ fun LibraryScreen(
                     // ── Carte "Continuer la lecture" ──
                     if (uiState.selectedCategoryId == null) {
                         uiState.continueReading?.let { ch ->
-                            item(key = "continue", contentType = "continue") {
+                            item(key = "continue") {
                                 ContinueReadingCard(
                                     novelTitle = ch.novelTitle.ifBlank { ch.novelSlug },
                                     chapterNumber = ch.chapterNumber,
@@ -118,7 +111,7 @@ fun LibraryScreen(
                     }
 
                     // ── Catégories ──
-                    item(key = "categories", contentType = "categories") {
+                    item(key = "categories") {
                         Column {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -166,30 +159,25 @@ fun LibraryScreen(
                     // ── Liste des novels ──
                     if (uiState.viewMode == ViewMode.GRID) {
                         uiState.novels.chunked(2).forEach { pair ->
-                            item(key = "row_${pair.first().slug}", contentType = "grid") {
+                            item(key = "row_${pair.first().slug}") {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     pair.forEach { n ->
-                                        KeyedItem(
-                                            key = n.slug,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Box {
-                                                NovelGridItem(
-                                                    novel = n,
-                                                    onClick = { onNovelClick(n.slug) },
-                                                    unreadCount = n.unreadChapterCount,
-                                                    onLongClick = { contextMenuSlug = n.slug }
-                                                )
-                                                NovelContextMenu(
-                                                    expanded = contextMenuSlug == n.slug,
-                                                    onDismiss = { contextMenuSlug = null },
-                                                    onTransfer = { viewModel.showNovelCategoryDialog(n) },
-                                                    onRemove = { viewModel.showRemoveFromLibraryDialog(n.slug, n.title) }
-                                                )
-                                            }
+                                        Box(Modifier.weight(1f)) {
+                                            NovelGridItem(
+                                                novel = n,
+                                                onClick = { onNovelClick(n.slug) },
+                                                unreadCount = n.unreadChapterCount,
+                                                onLongClick = { contextMenuSlug = n.slug }
+                                            )
+                                            NovelContextMenu(
+                                                expanded = contextMenuSlug == n.slug,
+                                                onDismiss = { contextMenuSlug = null },
+                                                onTransfer = { viewModel.showNovelCategoryDialog(n) },
+                                                onRemove = { viewModel.showRemoveFromLibraryDialog(n.slug, n.title) }
+                                            )
                                         }
                                     }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -198,7 +186,7 @@ fun LibraryScreen(
                             }
                         }
                     } else {
-                        items(uiState.novels, key = { it.slug }, contentType = "list") { n ->
+                        items(uiState.novels, key = { it.slug }) { n ->
                             Box {
                                 LibraryListItem(
                                     novel = n,
@@ -366,16 +354,9 @@ fun LibraryScreen(
 
 @Composable
 private fun ContinueReadingCard(novelTitle: String, chapterNumber: Int, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (isPressed) 1.dp else 4.dp, tween(120))
-    val scale by animateDpAsState(if (isPressed) 0.98f else 1f, tween(120))
-
     Card(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
@@ -455,15 +436,10 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryListItem(novel: NovelEntity, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (isPressed) 1.dp else 2.dp, tween(120))
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                interactionSource = interactionSource,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
@@ -584,10 +560,4 @@ private fun NovelContextMenu(
     }
 }
 
-/**
- * Composable utilitaire pour donner une clé de stabilité à un item.
- */
-@Composable
-private fun KeyedItem(key: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier) { content() }
-}
+
