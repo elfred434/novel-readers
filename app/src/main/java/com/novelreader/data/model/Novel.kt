@@ -42,11 +42,3 @@ enum class NovelStatus {
         }
     }
 }
-
-/**
- * Info d'un genre avec son slug pour les filtres.
- */
-data class GenreInfo(
-    val name: String,
-    val slug: String
-)
