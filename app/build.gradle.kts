@@ -29,12 +29,9 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            // Keystore généré automatiquement par GitHub Actions
-            // Pour build local : crée un keystore avec:
-            // keytool -genkey -v -keystore novelreader.keystore -alias novelreader -keyalg RSA -keysize 2048 -validity 10000
-            val keystoreFile = rootProject.file("novelreader.keystore")
-            if (keystoreFile.exists()) {
+        val keystoreFile = rootProject.file("novelreader.keystore")
+        if (keystoreFile.exists()) {
+            create("release") {
                 storeFile = keystoreFile
                 storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "novelreader"
                 keyAlias = System.getenv("KEY_ALIAS") ?: "novelreader"
@@ -50,6 +47,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Utilise le keystore release s'il existe, sinon le debug signing par défaut
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.findByName("debug")
         }
         debug {

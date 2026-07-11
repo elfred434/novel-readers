@@ -37,12 +37,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Generate keystore for signing
+        run: |
+          keytool -genkey -v -keystore novelreader.keystore \
+            -alias novelreader -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass novelreader -keypass novelreader \
+            -dname "CN=NovelReader, OU=Dev, O=NovelReader, L=City, ST=State, C=FR"
+        env:
+          KEYSTORE_PASSWORD: novelreader
+          KEY_ALIAS: novelreader
+          KEY_PASSWORD: novelreader
+
       - name: Build Release APK
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || '' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || '' }}
+          KEYSTORE_PASSWORD: novelreader
+          KEY_ALIAS: novelreader
+          KEY_PASSWORD: novelreader
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
       - name: Build Debug APK
