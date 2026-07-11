@@ -1,0 +1,23 @@
+name: Demande de fonctionnalité
+description: Suggérer une idée
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème lié
+      description: À quel besoin répond cette fonctionnalité ?
+      placeholder: "Je trouve que…"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution souhaitée
+      description: Décris ce que tu voudrais voir
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées

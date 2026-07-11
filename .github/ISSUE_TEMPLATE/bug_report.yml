@@ -1,0 +1,45 @@
+name: Rapport de bug
+description: Signaler un problème
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version de NovelReader
+      description: Visible en bas des Paramètres
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Appareil
+      description: Modèle et version Android
+      placeholder: "Pixel 8, Android 15"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      description: Comment reproduire le bug ?
+      placeholder: "1. Va dans…\n2. Clique sur…\n3. Voir l'erreur…"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportement réel
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optionnel)
+      render: shell
