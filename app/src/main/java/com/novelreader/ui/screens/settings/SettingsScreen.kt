@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,6 +47,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -115,16 +117,28 @@ fun SettingsScreen(
 
             // Queue
             SectionCard {
-                Row(Modifier.fillMaxWidth().clickable { onDownloadsClick() }, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("File d'attente", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                        val parts = mutableListOf<String>()
-                        if (uiState.activeDownloads > 0) parts.add("${uiState.activeDownloads} actif(s)")
-                        if (uiState.failedDownloads > 0) parts.add("${uiState.failedDownloads} échec(s)")
-                        Text(parts.joinToString(" · ").ifEmpty { "Aucun téléchargement" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column {
+                    Row(Modifier.fillMaxWidth().clickable { onDownloadsClick() }, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("File d'attente", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                            val parts = mutableListOf<String>()
+                            if (uiState.activeDownloads > 0) parts.add("${uiState.activeDownloads} actif(s)")
+                            if (uiState.failedDownloads > 0) parts.add("${uiState.failedDownloads} échec(s)")
+                            Text(parts.joinToString(" · ").ifEmpty { "Aucun téléchargement" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (uiState.failedDownloads > 0) {
+                        TextButton(
+                            onClick = viewModel::retryFailedDownloads,
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Replay, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Réessayer les ${uiState.failedDownloads} échec(s)")
+                        }
+                    }
                 }
             }
 

@@ -311,19 +311,6 @@ fun LibraryScreen(
                 onDismissRequest = viewModel::hideRemoveFromLibraryDialog,
                 containerColor = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(20.dp),
-                icon = {
-                    Box(
-                        Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                },
                 title = { Text("Retirer de la bibliothèque ?", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
@@ -361,7 +348,7 @@ private fun ContinueReadingCard(novelTitle: String, chapterNumber: Int, onClick:
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             Modifier.padding(16.dp),
@@ -445,7 +432,7 @@ private fun LibraryListItem(novel: NovelEntity, onClick: () -> Unit, onLongClick
             ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             Modifier.fillMaxWidth().padding(12.dp),

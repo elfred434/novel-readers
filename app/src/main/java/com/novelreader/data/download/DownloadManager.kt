@@ -110,6 +110,17 @@ class DownloadManager @Inject constructor(
         processQueue()
     }
 
+    fun cancelAll() {
+        _queue.update { current ->
+            current.map {
+                if (it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING) {
+                    it.copy(status = DownloadStatus.CANCELLED)
+                } else it
+            }
+        }
+        processQueue()
+    }
+
     fun retryAllFailed() {
         _queue.update { current -> current.map { if (it.status == DownloadStatus.FAILED) it.copy(status = DownloadStatus.QUEUED, retryCount = 0, error = null) else it } }
         processQueue()

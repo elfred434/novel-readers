@@ -1,8 +1,10 @@
 package com.novelreader.ui.screens.settings
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelreader.data.download.DownloadManager
+import com.novelreader.data.download.DownloadService
 import com.novelreader.data.download.DownloadStatus
 import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.preferences.PreferencesManager
@@ -14,7 +16,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,7 +47,8 @@ class SettingsViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
     private val extensionManager: ExtensionManager,
     private val storageManager: StorageManager,
-    private val networkManager: NetworkStateManager
+    private val networkManager: NetworkStateManager,
+    private val app: Application
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -127,7 +129,10 @@ class SettingsViewModel @Inject constructor(
             prefs.setWifiHighDataMode(newVal)
         }
     }
-    fun retryFailedDownloads() { downloadManager.retryAllFailed() }
+    fun retryFailedDownloads() {
+        downloadManager.retryAllFailed()
+        DownloadService.start(app)
+    }
 
     fun clearCache() {
         viewModelScope.launch {

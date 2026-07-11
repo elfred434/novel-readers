@@ -25,6 +25,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Service de téléchargement en arrière-plan (foreground) -->
+        <service
+            android:name=".data.download.DownloadService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
         <!-- Désactive l'initialiseur WorkManager par défaut (on utilise Configuration.Provider) -->
         <provider
             android:name="androidx.startup.InitializationProvider"
