@@ -9,6 +9,7 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.novelreader.data.download.DownloadService
 import com.novelreader.data.storage.StorageManager
+import com.novelreader.data.update.AppUpdateChecker
 import com.novelreader.data.worker.UpdateWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,9 @@ class NovelReaderApp : Application(), Configuration.Provider {
     @Inject
     lateinit var storageManager: StorageManager
 
+    @Inject
+    lateinit var updateChecker: AppUpdateChecker
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -41,7 +45,23 @@ class NovelReaderApp : Application(), Configuration.Provider {
         super.onCreate()
         createNotificationChannels()
         autoCreateStorage()
+        checkAppUpdate()
         scheduleUpdates()
+    }
+
+    /**
+     * Vérifie les mises à jour au lancement (silencieuse).
+     * La notification sera affichée dans les paramètres.
+     */
+    private fun checkAppUpdate() {
+        scope.launch {
+            try {
+                val update = updateChecker.checkForUpdate()
+                if (update != null) {
+                    android.util.Log.i("NovelReader", "Mise à jour v${update.versionName} disponible")
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     /**

@@ -3,6 +3,7 @@ package com.novelreader.ui.screens.settings
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novelreader.BuildConfig
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.download.DownloadService
 import com.novelreader.data.download.DownloadStatus
@@ -11,6 +12,8 @@ import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.network.NetworkStateManager
 import com.novelreader.data.repository.NovelRepository
 import com.novelreader.data.storage.StorageManager
+import com.novelreader.data.update.AppUpdateChecker
+import com.novelreader.data.update.AppUpdateInstaller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +41,11 @@ data class SettingsUiState(
     val storageUsed: String = "0 Mo",
     val downloadCountOnDisk: Int = 0,
     val isOnline: Boolean = false,
-    val isOnWifi: Boolean = false
+    val isOnWifi: Boolean = false,
+    val updateAvailable: String? = null,   // null = pas de maj, vide = vérification, version = disponible
+    val updateChangelog: String? = null,
+    val isDownloadingUpdate: Boolean = false,
+    val currentVersion: String = ""
 )
 
 @HiltViewModel
@@ -49,7 +56,8 @@ class SettingsViewModel @Inject constructor(
     private val extensionManager: ExtensionManager,
     private val storageManager: StorageManager,
     private val networkManager: NetworkStateManager,
-    private val app: Application
+    private val app: Application,
+    private val updateChecker: com.novelreader.data.update.AppUpdateChecker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -89,6 +97,48 @@ class SettingsViewModel @Inject constructor(
         }
 
         loadStorageInfo()
+
+        // Vérifier version actuelle
+        _uiState.update { it.copy(currentVersion = BuildConfig.VERSION_NAME) }
+
+        // Vérifier mise à jour au lancement
+        checkForUpdate()
+    }
+
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(updateAvailable = "") } // chargement
+            val update = updateChecker.checkForUpdate()
+            if (update != null) {
+                _uiState.update { it.copy(
+                    updateAvailable = update.versionName,
+                    updateChangelog = update.changelog
+                )}
+            } else {
+                _uiState.update { it.copy(updateAvailable = null) }
+            }
+        }
+    }
+
+    fun downloadUpdate() {
+        val version = _uiState.value.updateAvailable ?: return
+        _uiState.update { it.copy(isDownloadingUpdate = true) }
+
+        viewModelScope.launch {
+            try {
+                // Récupérer l'URL depuis le checker
+                val update = updateChecker.checkForUpdate() ?: return@launch
+                val installer = AppUpdateInstaller(app)
+                installer.downloadAndInstall(
+                    apkUrl = update.apkUrl,
+                    onComplete = {
+                        _uiState.update { it.copy(isDownloadingUpdate = false) }
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isDownloadingUpdate = false) }
+            }
+        }
     }
 
     private fun loadStorageInfo() {

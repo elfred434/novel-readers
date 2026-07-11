@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novelreader.ui.theme.AppTheme
+import com.novelreader.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -270,8 +271,57 @@ fun SettingsScreen(
                 }
             }
 
+            // === MISE À JOUR ===
+            SectionCard {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.SystemUpdate, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Mise à jour", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+
+                            when {
+                                uiState.updateAvailable == "" ->
+                                    Text("Vérification…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                uiState.updateAvailable != null && uiState.updateAvailable!!.isNotEmpty() && !uiState.isDownloadingUpdate ->
+                                    Text("v${uiState.updateAvailable} disponible", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                uiState.isDownloadingUpdate ->
+                                    Text("Téléchargement…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                else ->
+                                    Text("À jour", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    if (uiState.updateAvailable != null && uiState.updateAvailable!!.isNotEmpty()) {
+                        if (uiState.updateChangelog != null && uiState.updateChangelog!!.isNotBlank()) {
+                            Text(
+                                uiState.updateChangelog!!.take(200).replace(Regex("(?m)^#+\\s*"), "").lines().take(5).joinToString("\n").trim(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 5
+                            )
+                        }
+                        Button(
+                            onClick = viewModel::downloadUpdate,
+                            enabled = !uiState.isDownloadingUpdate,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Download, null, modifier = Modifier.padding(end = 6.dp))
+                            Text(if (uiState.isDownloadingUpdate) "Téléchargement…" else "Télécharger v${uiState.updateAvailable}")
+                        }
+                    } else if (uiState.updateAvailable == null) {
+                        TextButton(onClick = viewModel::checkForUpdate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Vérifier les mises à jour", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
-            Text("NovelReader v1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+            Text("NovelReader v${uiState.currentVersion}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
 }

@@ -79,6 +79,10 @@ object AppModule {
     fun provideNetworkStateManager(@ApplicationContext context: Context): com.novelreader.data.network.NetworkStateManager =
         com.novelreader.data.network.NetworkStateManager(context)
 
+    @Provides @Singleton
+    fun provideAppUpdateChecker(): com.novelreader.data.update.AppUpdateChecker =
+        com.novelreader.data.update.AppUpdateChecker()
+
     // ===================== Storage =====================
 
     @Provides @Singleton
