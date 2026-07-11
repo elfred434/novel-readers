@@ -77,13 +77,13 @@ fun DetailScreen(
                     // ── HEADER ──
                     item(key = "header") {
                         Column(Modifier.fillMaxWidth()) {
-                            Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
                                 if (novel.coverImageUrl.isNotBlank()) {
                                     AsyncImage(model = novel.coverImageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f)))
                                 }
                                 Row(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Bottom) {
+                                    horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Top) {
                                     Box(modifier = Modifier.width(120.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(14.dp)).background(Color(0xFF0A0A0A)), contentAlignment = Alignment.Center) {
                                         if (novel.coverImageUrl.isNotBlank()) AsyncImage(model = novel.coverImageUrl, contentDescription = novel.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         else Text(novel.title.take(2).uppercase(), style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
