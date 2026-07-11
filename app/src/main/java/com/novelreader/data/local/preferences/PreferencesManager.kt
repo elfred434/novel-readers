@@ -58,6 +58,18 @@ class PreferencesManager(private val context: Context) {
     suspend fun getSafTreeUri(): String? = context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
     suspend fun setSafTreeUri(uri: String?) { context.dataStore.edit { if (uri != null) it[KEY_STORAGE_SAF_URI] = uri else it.remove(KEY_STORAGE_SAF_URI) } }
 
+    // ===== Stockage interne automatique =====
+    /** Chemin du dossier de stockage auto-créé dans filesDir. */
+    val internalStoragePath: Flow<String?> = context.dataStore.data.map { it[KEY_INTERNAL_STORAGE_PATH] }
+    suspend fun setInternalStoragePath(path: String?) { context.dataStore.edit { if (path != null) it[KEY_INTERNAL_STORAGE_PATH] = path else it.remove(KEY_INTERNAL_STORAGE_PATH) } }
+
+    /** Vrai si un emplacement de stockage est configuré (SAF ou interne). */
+    suspend fun hasAnyStorage(): Boolean = getSafTreeUri() != null || context.dataStore.data.first()[KEY_INTERNAL_STORAGE_PATH] != null
+
+    fun hasAnyStorageSync(): Boolean {
+        return try { runBlocking { hasAnyStorage() } } catch (e: Exception) { false }
+    }
+
     fun hasStorageLocationSync(): Boolean {
         return try { runBlocking { getSafTreeUri() != null } } catch (e: Exception) { false }
     }
@@ -76,5 +88,6 @@ class PreferencesManager(private val context: Context) {
         private val KEY_DOWNLOAD_ON_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
         private val KEY_WIFI_HIGH_DATA = booleanPreferencesKey("wifi_high_data_mode")
         private val KEY_STORAGE_SAF_URI = stringPreferencesKey("storage_saf_uri")
+        private val KEY_INTERNAL_STORAGE_PATH = stringPreferencesKey("internal_storage_path")
     }
 }

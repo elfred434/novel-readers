@@ -7,16 +7,21 @@ import com.novelreader.data.local.preferences.PreferencesManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gestionnaire de stockage — SAF uniquement.
- * L'utilisateur choisit un dossier via le sélecteur Android (Storage Access Framework).
- * La permission est persistée via takePersistableUriPermission().
+ * Gestionnaire de stockage.
  *
- * Structure :
- *   {dossier_choisi}/novels/{slug_sanitized}/{chapterNumber}.json
+ * Deux modes :
+ *   1. **Interne (auto-créé)** — utilise java.io.File dans context.filesDir
+ *      Créé automatiquement au premier lancement, aucune action utilisateur requise.
+ *   2. **SAF (Storage Access Framework)** — l'utilisateur choisit un dossier
+ *      via le sélecteur Android. La permission est persistée via takePersistableUriPermission().
+ *
+ * Structure (identique dans les deux modes) :
+ *   {base}/novels/{slug_sanitized}/{chapterNumber}.json
  *
  * @property context Contexte Android
  * @property prefs Stocke l'URI du dossier racine
@@ -31,17 +36,59 @@ class StorageManager @Inject constructor(
         private const val BASE_FOLDER = "novels"
     }
 
-    // ── URI du dossier racine ──────────────────────────────
+    // ── Initialisation automatique ───────────────────────
 
-    suspend fun getSafTreeUri(): String? = prefs.getSafTreeUri()
-    suspend fun setSafTreeUri(uri: String?) = prefs.setSafTreeUri(uri)
+    /**
+     * Crée le dossier de stockage automatiquement dans filesDir
+     * si aucun emplacement SAF n'est configuré.
+     * Appelé au premier lancement depuis NovelReaderApp.onCreate().
+     */
+    suspend fun autoCreateStorageLocation(): Boolean = withContext(Dispatchers.IO) {
+        if (prefs.getSafTreeUri() != null) return@withContext true // déjà configuré en SAF
+        if (prefs.internalStoragePath.first() != null) return@withContext true // déjà initialisé
 
-    fun hasStorageLocation(): Boolean = prefs.hasStorageLocationSync()
+        val dir = File(context.filesDir, "NovelReader/$BASE_FOLDER")
+        try {
+            dir.mkdirs()
+            if (dir.exists()) {
+                prefs.setInternalStoragePath(dir.absolutePath)
+                true
+            } else false
+        } catch (e: Exception) { false }
+    }
+
+    /** Vrai si l'emplacement de stockage est un dossier interne auto-créé. */
+    suspend fun isUsingInternalStorage(): Boolean =
+        prefs.getSafTreeUri() == null && prefs.internalStoragePath.first() != null
+
+    /** Vrai si l'emplacement de stockage a été choisi via SAF. */
+    suspend fun isUsingSaf(): Boolean = prefs.getSafTreeUri() != null
+
+    /** Vrai si un emplacement de stockage est disponible. */
+    suspend fun hasStorageLocation(): Boolean = prefs.hasAnyStorage()
+
+    fun hasStorageLocationSync(): Boolean = prefs.hasAnyStorageSync()
+
+    /** Retourne le chemin lisible du dossier de stockage actuel. */
+    suspend fun getStorageDisplayPath(): String = withContext(Dispatchers.IO) {
+        val safUri = prefs.getSafTreeUri()
+        if (safUri != null) {
+            Uri.parse(safUri).lastPathSegment ?: "Dossier SAF"
+        } else {
+            prefs.internalStoragePath.first() ?: "Non configuré"
+        }
+    }
 
     // ── Dossier de base ────────────────────────────────────
 
+    private suspend fun getBaseFile(): File? = withContext(Dispatchers.IO) {
+        val path = prefs.internalStoragePath.first() ?: return@withContext null
+        val f = File(path)
+        if (f.exists()) f else null
+    }
+
     private suspend fun getBaseDir(): DocumentFile? = withContext(Dispatchers.IO) {
-        val uriStr = getSafTreeUri() ?: return@withContext null
+        val uriStr = prefs.getSafTreeUri() ?: return@withContext null
         val treeUri = Uri.parse(uriStr)
         val doc = DocumentFile.fromTreeUri(context, treeUri)
         doc?.findFile(BASE_FOLDER) ?: doc?.createDirectory(BASE_FOLDER)
@@ -49,19 +96,56 @@ class StorageManager @Inject constructor(
 
     // ── Dossier d'un novel ─────────────────────────────────
 
-    suspend fun getNovelDir(novelSlug: String): DocumentFile? = withContext(Dispatchers.IO) {
+    private fun novelFileDir(slug: String): File = File(
+        getBaseFile() ?: File(context.filesDir, "NovelReader/$BASE_FOLDER"),
+        sanitizeFolderName(slug)
+    )
+
+    private suspend fun getNovelDir(slug: String): DocumentFile? = withContext(Dispatchers.IO) {
         val base = getBaseDir() ?: return@withContext null
-        val folderName = sanitizeFolderName(novelSlug)
+        val folderName = sanitizeFolderName(slug)
         base.findFile(folderName) ?: base.createDirectory(folderName)
+    }
+
+    // ── Mode interne (java.io.File) ────────────────────────
+
+    private suspend fun <T> withStorage(
+        safBlock: suspend (DocumentFile) -> T?,
+        fileBlock: suspend (File) -> T?
+    ): T? = withContext(Dispatchers.IO) {
+        val safUri = prefs.getSafTreeUri()
+        if (safUri != null) {
+            val base = getBaseDir() ?: return@withContext null
+            safBlock(base)
+        } else {
+            val base = getBaseFile() ?: return@withContext null
+            fileBlock(base)
+        }
+    }
+
+    private suspend fun <T> withNovelStorage(
+        slug: String,
+        safBlock: suspend (DocumentFile) -> T?,
+        fileBlock: suspend (File) -> T?
+    ): T? = withContext(Dispatchers.IO) {
+        val safUri = prefs.getSafTreeUri()
+        if (safUri != null) {
+            val dir = getNovelDir(slug) ?: return@withContext null
+            safBlock(dir)
+        } else {
+            val dir = novelFileDir(slug)
+            dir.mkdirs()
+            if (!dir.exists()) return@withContext null
+            fileBlock(dir)
+        }
     }
 
     // ── Opérations fichier ─────────────────────────────────
 
     suspend fun saveChapterFile(
         novelSlug: String, chapterNumber: Int, jsonContent: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext false
+    ): Boolean = withNovelStorage(novelSlug,
+        safBlock = { dir ->
             val fileName = "$chapterNumber.json"
             dir.findFile(fileName)?.delete()
             val newFile = dir.createFile("application/json", fileName.substringBeforeLast("."))
@@ -70,94 +154,128 @@ class StorageManager @Inject constructor(
                     stream.write(jsonContent.toByteArray(Charsets.UTF_8)); true
                 }
             } ?: false
-        } catch (e: Exception) { false }
-    }
+        },
+        fileBlock = { dir ->
+            try {
+                val file = File(dir, "$chapterNumber.json")
+                file.writeText(jsonContent, Charsets.UTF_8)
+                true
+            } catch (e: Exception) { false }
+        }
+    ) ?: false
 
-    suspend fun loadChapterFile(novelSlug: String, chapterNumber: Int): String? = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext null
-            val file = dir.findFile("$chapterNumber.json") ?: return@withContext null
+    suspend fun loadChapterFile(novelSlug: String, chapterNumber: Int): String? = withNovelStorage(novelSlug,
+        safBlock = { dir ->
+            val file = dir.findFile("$chapterNumber.json") ?: return@withNovelStorage null
             context.contentResolver.openInputStream(file.uri)?.use { it.bufferedReader().readText() }
-        } catch (e: Exception) { null }
-    }
+        },
+        fileBlock = { dir ->
+            try {
+                val file = File(dir, "$chapterNumber.json")
+                if (file.exists()) file.readText(Charsets.UTF_8) else null
+            } catch (e: Exception) { null }
+        }
+    )
 
-    suspend fun isChapterDownloaded(novelSlug: String, chapterNumber: Int): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext false
-            dir.findFile("$chapterNumber.json") != null
-        } catch (e: Exception) { false }
-    }
+    suspend fun isChapterDownloaded(novelSlug: String, chapterNumber: Int): Boolean = withNovelStorage(novelSlug,
+        safBlock = { dir -> dir.findFile("$chapterNumber.json") != null },
+        fileBlock = { dir -> File(dir, "$chapterNumber.json").exists() }
+    ) ?: false
 
-    suspend fun deleteChapterFile(novelSlug: String, chapterNumber: Int): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext false
-            dir.findFile("$chapterNumber.json")?.delete() ?: false
-        } catch (e: Exception) { false }
-    }
+    suspend fun deleteChapterFile(novelSlug: String, chapterNumber: Int): Boolean = withNovelStorage(novelSlug,
+        safBlock = { dir -> dir.findFile("$chapterNumber.json")?.delete() ?: false },
+        fileBlock = { dir -> File(dir, "$chapterNumber.json").delete() }
+    ) ?: false
 
-    suspend fun deleteMultipleChapterFiles(novelSlug: String, chapterNumbers: List<Int>): Int = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext 0
+    suspend fun deleteMultipleChapterFiles(novelSlug: String, chapterNumbers: List<Int>): Int = withNovelStorage(novelSlug,
+        safBlock = { dir ->
             var deleted = 0
             for (num in chapterNumbers) {
                 if (dir.findFile("$num.json")?.delete() == true) deleted++
             }
             deleted
-        } catch (e: Exception) { 0 }
-    }
+        },
+        fileBlock = { dir ->
+            var deleted = 0
+            for (num in chapterNumbers) {
+                val f = File(dir, "$num.json")
+                if (f.delete()) deleted++
+            }
+            deleted
+        }
+    ) ?: 0
 
-    suspend fun deleteNovelFiles(novelSlug: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val base = getBaseDir() ?: return@withContext false
+    suspend fun deleteNovelFiles(novelSlug: String): Boolean = withStorage(
+        safBlock = { base ->
             base.findFile(sanitizeFolderName(novelSlug))?.delete() ?: false
-        } catch (e: Exception) { false }
-    }
+        },
+        fileBlock = { base ->
+            val dir = File(base, sanitizeFolderName(novelSlug))
+            dir.deleteRecursively()
+        }
+    ) ?: false
 
     // ── Compteurs ─────────────────────────────────────────
 
-    suspend fun countDownloadedChapters(): Int = withContext(Dispatchers.IO) {
-        try {
-            val base = getBaseDir() ?: return@withContext 0
-            countFilesRecursive(base)
-        } catch (e: Exception) { 0 }
-    }
+    suspend fun countDownloadedChapters(): Int = withStorage(
+        safBlock = { base -> countFilesRecursive(base) },
+        fileBlock = { base ->
+            if (!base.exists()) 0
+            else base.walkTopDown().count { it.isFile && it.name.endsWith(".json") }
+        }
+    ) ?: 0
 
     private fun countFilesRecursive(doc: DocumentFile): Int {
         var count = 0
-        doc.listFiles().forEach { if (it.isDirectory) count += countFilesRecursive(it) else if (it.name?.endsWith(".json") == true) count++ }
+        doc.listFiles().forEach {
+            if (it.isDirectory) count += countFilesRecursive(it)
+            else if (it.name?.endsWith(".json") == true) count++
+        }
         return count
     }
 
-    suspend fun getDownloadedNovelSlugs(): List<String> = withContext(Dispatchers.IO) {
-        try {
-            val base = getBaseDir() ?: return@withContext emptyList()
+    suspend fun getDownloadedNovelSlugs(): List<String> = withStorage(
+        safBlock = { base ->
             base.listFiles().filter { it.isDirectory && it.listFiles().isNotEmpty() }.mapNotNull { it.name }
-        } catch (e: Exception) { emptyList() }
-    }
+        },
+        fileBlock = { base ->
+            if (!base.exists()) emptyList()
+            else base.listFiles()?.filter { it.isDirectory && it.listFiles()?.isNotEmpty() == true }?.map { it.name } ?: emptyList()
+        }
+    ) ?: emptyList()
 
-    suspend fun getDownloadedChapterNumbers(novelSlug: String): List<Int> = withContext(Dispatchers.IO) {
-        try {
-            val dir = getNovelDir(novelSlug) ?: return@withContext emptyList()
+    suspend fun getDownloadedChapterNumbers(novelSlug: String): List<Int> = withNovelStorage(novelSlug,
+        safBlock = { dir ->
             dir.listFiles().filter { it.name?.endsWith(".json") == true }
                 .mapNotNull { it.name?.substringBeforeLast(".")?.toIntOrNull() }.sorted()
-        } catch (e: Exception) { emptyList() }
-    }
+        },
+        fileBlock = { dir ->
+            dir.listFiles()?.filter { it.name.endsWith(".json") }
+                ?.mapNotNull { it.name.substringBeforeLast(".").toIntOrNull() }?.sorted() ?: emptyList()
+        }
+    ) ?: emptyList()
 
-    suspend fun deleteAllFiles(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val base = getBaseDir() ?: return@withContext false
+    suspend fun deleteAllFiles(): Boolean = withStorage(
+        safBlock = { base ->
             var success = true
             base.listFiles().forEach { if (!it.delete()) success = false }
             success
-        } catch (e: Exception) { false }
-    }
+        },
+        fileBlock = { base ->
+            try {
+                base.listFiles()?.forEach { it.deleteRecursively() }
+                true
+            } catch (e: Exception) { false }
+        }
+    ) ?: false
 
-    suspend fun getStorageSizeBytes(): Long = withContext(Dispatchers.IO) {
-        try {
-            val base = getBaseDir() ?: return@withContext 0L
-            sizeRecursive(base)
-        } catch (e: Exception) { 0L }
-    }
+    suspend fun getStorageSizeBytes(): Long = withStorage(
+        safBlock = { base -> sizeRecursive(base) },
+        fileBlock = { base ->
+            if (!base.exists()) 0L
+            else base.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+        }
+    ) ?: 0L
 
     private fun sizeRecursive(doc: DocumentFile): Long {
         var size = 0L

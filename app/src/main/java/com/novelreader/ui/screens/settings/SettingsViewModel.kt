@@ -34,6 +34,7 @@ data class SettingsUiState(
     val failedDownloads: Int = 0,
     val extensionCount: Int = 1,
     val hasStorageLocation: Boolean = false,
+    val storagePath: String = "Non configuré",
     val storageUsed: String = "0 Mo",
     val downloadCountOnDisk: Int = 0,
     val isOnline: Boolean = false,
@@ -92,15 +93,16 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadStorageInfo() {
         viewModelScope.launch {
-            val hasUri = prefs.getSafTreeUri() != null
-            val count = withContext(Dispatchers.IO) { if (hasUri) storageManager.countDownloadedChapters() else 0 }
-            val bytes = withContext(Dispatchers.IO) { if (hasUri) storageManager.getStorageSizeBytes() else 0L }
+            val hasStorage = prefs.hasAnyStorage()
+            val displayPath = storageManager.getStorageDisplayPath()
+            val count = withContext(Dispatchers.IO) { if (hasStorage) storageManager.countDownloadedChapters() else 0 }
+            val bytes = withContext(Dispatchers.IO) { if (hasStorage) storageManager.getStorageSizeBytes() else 0L }
             val sizeStr = when {
                 bytes < 1024 -> "$bytes o"
                 bytes < 1024 * 1024 -> "${bytes / 1024} Ko"
                 else -> "%.1f Mo".format(bytes.toDouble() / (1024 * 1024))
             }
-            _uiState.update { it.copy(hasStorageLocation = hasUri, downloadCountOnDisk = count, storageUsed = sizeStr) }
+            _uiState.update { it.copy(hasStorageLocation = hasStorage, downloadCountOnDisk = count, storageUsed = sizeStr, storagePath = displayPath) }
         }
     }
 

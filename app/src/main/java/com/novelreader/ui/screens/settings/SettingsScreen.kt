@@ -172,7 +172,7 @@ fun SettingsScreen(
                 }
             }
 
-            // === STOCKAGE SAF — UNIQUE EMPLACEMENT ===
+            // === STOCKAGE ===
             SectionCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -181,8 +181,9 @@ fun SettingsScreen(
                             Text("Dossier de stockage", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
                             if (uiState.hasStorageLocation) {
                                 Text("${uiState.downloadCountOnDisk} chapitre(s) · ${uiState.storageUsed}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(uiState.storagePath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), maxLines = 1)
                             } else {
-                                Text("Aucun dossier choisi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                Text("Création automatique…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -194,7 +195,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(Icons.Default.FolderOpen, null, modifier = Modifier.padding(end = 6.dp))
-                        Text(if (uiState.hasStorageLocation) "Changer de dossier" else "Choisir un dossier")
+                        Text(if (uiState.hasStorageLocation) "Changer de dossier" else "Choisir un dossier externe")
                     }
                     if (uiState.hasStorageLocation) {
                         Button(
