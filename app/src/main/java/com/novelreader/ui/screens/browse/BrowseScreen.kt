@@ -108,7 +108,7 @@ fun BrowseScreen(onNovelClick: (String) -> Unit, viewModel: BrowseViewModel = hi
                         }
                     }
 
-                    // Ligne 2 : Genres (P3) — extraits des résultats
+                    // Ligne 2 : Genres — liste complète chargée depuis /api/genres
                     if (uiState.availableGenres.isNotEmpty() && uiState.genreSlug == null) {
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -117,7 +117,7 @@ fun BrowseScreen(onNovelClick: (String) -> Unit, viewModel: BrowseViewModel = hi
                         ) {
                             uiState.availableGenres.take(15).forEach { genre ->
                                 FilterChip(
-                                    label = genre.name,
+                                    label = if (genre.count > 0) "${genre.name} (${genre.count})" else genre.name,
                                     selected = uiState.genreSlug == genre.slug,
                                     onClick = { viewModel.setGenreFilter(genre.slug) }
                                 )

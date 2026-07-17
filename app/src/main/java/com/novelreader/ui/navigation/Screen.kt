@@ -76,11 +76,6 @@ sealed class Screen(
         title = "Téléchargements"
     )
 
-    data object Search : Screen(
-        route = "search",
-        title = "Recherche"
-    )
-
     companion object {
         /** Liste des écrans affichés dans la BottomNavBar. */
         val bottomNavItems = listOf(Library, Browse, Updates, History)

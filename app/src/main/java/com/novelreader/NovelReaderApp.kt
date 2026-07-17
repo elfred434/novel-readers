@@ -8,6 +8,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.novelreader.data.download.DownloadService
+import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.update.AppUpdateChecker
 import com.novelreader.data.worker.UpdateWorker
@@ -33,6 +34,9 @@ class NovelReaderApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var updateChecker: AppUpdateChecker
+
+    @Inject
+    lateinit var preferencesManager: PreferencesManager
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -109,8 +113,16 @@ class NovelReaderApp : Application(), Configuration.Provider {
         }
     }
 
+    /**
+     * Planifie le worker périodique avec l'intervalle choisi par l'utilisateur
+     * (défaut 12 h) et le REPLANIFIE automatiquement quand la préférence change
+     * (ExistingPeriodicWorkPolicy.UPDATE côté WorkManager).
+     */
     private fun scheduleUpdates() {
-        val workManager = WorkManager.getInstance(this)
-        UpdateWorker.schedule(workManager, intervalHours = 12)
+        scope.launch {
+            preferencesManager.updateIntervalHours.collect { hours ->
+                UpdateWorker.schedule(WorkManager.getInstance(this@NovelReaderApp), hours.toLong())
+            }
+        }
     }
 }

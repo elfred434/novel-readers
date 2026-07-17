@@ -8,7 +8,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,14 +19,13 @@ import javax.inject.Singleton
  *
  * Résout le conflit de signature Android en téléchargeant l'APK
  * via le DownloadManager système + Intent d'installation standard.
+ *
+ * Réutilise le OkHttpClient partagé (User-Agent cohérent, timeouts configurés).
  */
 @Singleton
-class AppUpdateChecker @Inject constructor() {
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+class AppUpdateChecker @Inject constructor(
+    private val client: OkHttpClient
+) {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 

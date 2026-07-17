@@ -60,13 +60,18 @@ class AppUpdateInstaller(private val context: Context) {
             override fun onReceive(ctx: Context, intent: Intent) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                 if (id == downloadId) {
+                    // Désenregistrer immédiatement pour éviter la fuite du receiver
+                    try { ctx.unregisterReceiver(this) } catch (_: Exception) {}
+                    receiver = null
                     installApk(fileName)
                     onComplete?.invoke()
                 }
             }
         }
+        // RECEIVER_NOT_EXPORTED : le broadcast système de DownloadManager est
+        // tout de même délivré, mais une app tierce ne peut pas le forger.
         context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            Context.RECEIVER_EXPORTED)
+            Context.RECEIVER_NOT_EXPORTED)
     }
 
     /**

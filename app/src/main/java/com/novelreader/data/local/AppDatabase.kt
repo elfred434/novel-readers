@@ -21,6 +21,8 @@ import com.novelreader.data.local.entity.NovelEntity
  *   v2 : Ajout novelTitle dans ChapterEntity
  *   v3 : Ajout CategoryEntity + NovelCategoryCrossRef
  *   v4 : Ajout storageFolderName dans NovelEntity
+ *   v5 : Retrait storageFolderName (champ mort — le nom de dossier est
+ *        recalculé à la volée par StorageManager.sanitizeFolderName)
  */
 @Database(
     entities = [
@@ -30,7 +32,7 @@ import com.novelreader.data.local.entity.NovelEntity
         CategoryEntity::class,
         NovelCategoryCrossRef::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

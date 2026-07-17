@@ -126,11 +126,15 @@ class StorageManager @Inject constructor(
             safBlock = { dir ->
                 val fileName = "$chapterNumber.json"
                 dir.findFile(fileName)?.delete()
-                val newFile = dir.createFile("application/json", fileName.substringBeforeLast("."))
-                newFile?.let { file ->
-                    context.contentResolver.openOutputStream(file.uri)?.use { stream ->
-                        stream.write(jsonContent.toByteArray(Charsets.UTF_8)); true
-                    }
+                // Certains providers SAF ajoutent l'extension d'après le MIME,
+                // d'autres non → on vérifie et on renomme si nécessaire pour
+                // que loadChapterFile("$chapterNumber.json") retrouve le fichier.
+                val created = dir.createFile("application/json", chapterNumber.toString())
+                    ?: return@withNovelStorage false
+                if (created.name != fileName) created.renameTo(fileName)
+                val target = dir.findFile(fileName) ?: created
+                context.contentResolver.openOutputStream(target.uri, "wt")?.use { stream ->
+                    stream.write(jsonContent.toByteArray(Charsets.UTF_8)); true
                 } ?: false
             },
             fileBlock = { dir ->

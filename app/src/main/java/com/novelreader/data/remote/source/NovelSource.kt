@@ -52,6 +52,12 @@ interface NovelSource {
     /** Contenu texte d'un chapitre */
     suspend fun getChapterContent(chapterUrl: String): ChapterContent
 
+    /**
+     * Genres du catalogue avec compteurs, pour les filtres de l'UI.
+     * Optionnel : liste vide par défaut si la source ne les expose pas.
+     */
+    suspend fun getGenres(): List<SourceGenre> = emptyList()
+
     /** Convertit cette source en métadonnées pour l'affichage */
     fun toExtensionInfo() = com.novelreader.data.extension.ExtensionInfo(
         id = id,
@@ -63,3 +69,13 @@ interface NovelSource {
         supportsLatest = supportsLatest
     )
 }
+
+/**
+ * Un genre du catalogue d'une source, avec son nombre de novels.
+ * Utilisé pour peupler les filtres de l'écran Parcourir.
+ */
+data class SourceGenre(
+    val name: String,
+    val slug: String,
+    val novelCount: Int = 0
+)

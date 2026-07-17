@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.NovelReader" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Thème de démarrage SOMBRE (l'app est "Studio Noir", dark-first) :
+         évite le flash blanc au lancement avant que Compose ne prenne le relais. -->
+    <style name="Theme.NovelReader" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
 </resources>

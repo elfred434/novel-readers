@@ -1,6 +1,11 @@
 package com.novelreader.data.worker
 
+import android.Manifest
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -12,18 +17,26 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.novelreader.data.local.dao.ChapterDao
 import com.novelreader.data.local.dao.NovelDao
+import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.repository.NovelRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 /**
  * WorkManager principal qui déclenche la vérification des mises à jour.
  * Pour chaque novel dans la bibliothèque, il vérifie les nouveaux chapitres.
  *
- * AMÉLIORATION : Pour un traitement vraiment parallélisé, chaque novel
- * pourrait être traité dans un worker séparé. Pour le MVP, on traite
- * en séquence avec gestion d'erreur individuelle.
+ * CORRECTIONS AUDIT (v2) :
+ * - unreadChapterCount = VRAI nombre de chapitres non lus (getUnreadCount),
+ *   pas le nombre de nouveaux chapitres détectés.
+ * - Poste une notification « nouveaux chapitres » (canal novel_updates)
+ *   si la préférence notifications est activée.
+ * - cacheChapters() préserve désormais l'état de lecture (voir NovelRepository).
+ *
+ * AMÉLIORATION possible : traiter chaque novel dans un worker séparé pour
+ * paralléliser. Pour le MVP, traitement séquentiel avec erreur individuelle.
  */
 @HiltWorker
 class UpdateWorker @AssistedInject constructor(
@@ -31,14 +44,17 @@ class UpdateWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val repository: NovelRepository,
     private val novelDao: NovelDao,
-    private val chapterDao: ChapterDao
+    private val chapterDao: ChapterDao,
+    private val prefs: PreferencesManager
 ) : CoroutineWorker(context, params) {
 
     companion object {
         private const val WORK_NAME = "novel_update_check"
         private const val TAG_NOVEL_PREFIX = "novel_update_"
+        private const val CHANNEL_UPDATES = "novel_updates"
+        private const val NOTIFICATION_ID = 1002
 
-        /** Planifie le worker périodique. */
+        /** Planifie le worker périodique (UPDATE met à jour l'intervalle si changé). */
         fun schedule(workManager: WorkManager, intervalHours: Long = 12) {
             val request = PeriodicWorkRequestBuilder<UpdateWorker>(intervalHours, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -78,6 +94,12 @@ class UpdateWorker @AssistedInject constructor(
                 }
             }
 
+            // Notification récapitulative si nouveaux chapitres + préférence activée
+            if (totalNew > 0) {
+                val notifEnabled = runCatching { prefs.notificationsEnabled.first() }.getOrDefault(true)
+                if (notifEnabled) showUpdateNotification(totalNew)
+            }
+
             if (failures == novels.size && novels.isNotEmpty()) Result.retry()
             else Result.success()
         } catch (e: Exception) {
@@ -87,7 +109,7 @@ class UpdateWorker @AssistedInject constructor(
 
     /**
      * Vérifie les mises à jour pour un novel spécifique.
-     * Mutex-free car chaque novel est traité séquentiellement ici.
+     * Met à jour le compteur avec le VRAI nombre de chapitres non lus.
      */
     private suspend fun checkNovelUpdates(slug: String, title: String): Int {
         val remoteChapters = repository.getChapterList(slug)
@@ -96,10 +118,31 @@ class UpdateWorker @AssistedInject constructor(
         val newChapters = remoteChapters.filter { it.chapterNumber !in localNumbers }
 
         if (newChapters.isNotEmpty()) {
-            novelDao.updateUnreadCount(slug, newChapters.size)
+            // cacheChapters préserve isRead/scrollPosition/isDownloaded (upsert)
             repository.cacheChapters(slug, remoteChapters, title)
+            // Compteur = vrai total des non-lus (inclut les nouveaux insérés)
+            novelDao.updateUnreadCount(slug, chapterDao.getUnreadCount(slug))
         }
         return newChapters.size
+    }
+
+    /** Poste une notification « nouveaux chapitres » sur le canal dédié. */
+    private fun showUpdateNotification(newCount: Int) {
+        // Permission runtime requise depuis Android 13
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val notificationManager =
+            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("Nouveaux chapitres disponibles")
+            .setContentText("$newCount nouveau(x) chapitre(s) dans ta bibliothèque")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 }
 
@@ -126,8 +169,8 @@ class SingleNovelUpdateWorker @AssistedInject constructor(
             val newChapters = remoteChapters.filter { it.chapterNumber !in localNumbers }
 
             if (newChapters.isNotEmpty()) {
-                novelDao.updateUnreadCount(slug, newChapters.size)
                 repository.cacheChapters(slug, remoteChapters, novel.title)
+                novelDao.updateUnreadCount(slug, chapterDao.getUnreadCount(slug))
             }
             Result.success()
         } catch (e: Exception) {

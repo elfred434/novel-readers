@@ -32,6 +32,8 @@ data class DetailUiState(
     val downloadedChapters: Set<Int> = emptySet(),
     val downloadingChapters: Set<Int> = emptySet(),
     val lastReadChapterNumber: Int? = null,
+    /** Numéros des chapitres marqués comme lus (depuis Room). */
+    val readChapters: Set<Int> = emptySet(),
     val isSelectionMode: Boolean = false,
     val selectedChapters: Set<Int> = emptySet()
 )
@@ -54,6 +56,20 @@ class DetailViewModel @Inject constructor(
 
     init {
         loadNovelDetails()
+
+        // Observer les chapitres locaux pour afficher l'état « lu » de chacun
+        viewModelScope.launch {
+            repository.getLocalChapters(slug).collect { entities ->
+                _uiState.update {
+                    it.copy(
+                        readChapters = entities.filter { e -> e.isRead }.map { e -> e.chapterNumber }.toSet(),
+                        lastReadChapterNumber = entities.filter { e -> e.isRead }.maxByOrNull { e -> e.readAt ?: 0L }?.chapterNumber
+                            ?: it.lastReadChapterNumber
+                    )
+                }
+            }
+        }
+
         viewModelScope.launch {
             downloadManager.queue.collect { items ->
                 val slugItems = items.filter { it.novelSlug == slug }
@@ -105,7 +121,7 @@ class DetailViewModel @Inject constructor(
                             author = localNovel.author, coverImageUrl = localNovel.coverImageUrl,
                             synopsis = localNovel.synopsis, status = NovelStatus.fromString(localNovel.status),
                             rating = localNovel.rating, genres = localNovel.genres,
-                            chapterCount = localNovel.unreadChapterCount, sourceUrl = localNovel.sourceUrl)
+                            chapterCount = localChapters.size, sourceUrl = localNovel.sourceUrl)
                         val previews = localChapters.sortedBy { it.chapterNumber }.map { ch ->
                             ChapterPreview(id = ch.id, novelSlug = ch.novelSlug, chapterNumber = ch.chapterNumber,
                                 title = ch.title, url = ch.url, publishedAt = ch.publishedAt)

@@ -1,5 +1,6 @@
 package com.novelreader.data.repository
 
+import com.novelreader.data.extension.ExtensionManager
 import com.novelreader.data.local.dao.ChapterContentDao
 import com.novelreader.data.local.dao.ChapterDao
 import com.novelreader.data.local.dao.NovelDao
@@ -10,6 +11,7 @@ import com.novelreader.data.model.ChapterContent
 import com.novelreader.data.model.ChapterPreview
 import com.novelreader.data.model.Novel
 import com.novelreader.data.remote.source.NovelSource
+import com.novelreader.data.remote.source.SourceGenre
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -20,11 +22,12 @@ import javax.inject.Singleton
 /**
  * Repository central — pont entre le réseau (NovelSource) et la base locale (Room).
  *
- * CORRECTIONS AUDIT :
- * - Dépend de l'interface NovelSource (pas de la classe NovelFranceSource concrète)
- * - downloadChapter() met à jour isDownloaded sur le ChapterEntity
- * - getCachedChapter() stocke et restitue les titres du chapitre
- * - Les IDs de chapitres sont cohérents (format "novelSlug_chapterNumber")
+ * CORRECTIONS AUDIT (v2) :
+ * - cacheChapters() PRÉSERVE l'état local (isRead, readAt, scrollPosition,
+ *   isDownloaded) via un upsert INSERT(IGNORE)+UPDATE au lieu de REPLACE :
+ *   l'historique de lecture n'est plus effacé à chaque rafraîchissement,
+ *   et la cascade ON DELETE de chapter_content n'est plus déclenchée.
+ * - Les opérations réseau vérifient que la source est activée.
  *
  * @property source La source active (injectée via Hilt, typiquement NovelFranceSource)
  */
@@ -33,40 +36,64 @@ class NovelRepository @Inject constructor(
     private val source: NovelSource,          // Dépend de l'INTERFACE, pas de l'implémentation
     private val novelDao: NovelDao,
     private val chapterDao: ChapterDao,
-    private val chapterContentDao: ChapterContentDao
+    private val chapterContentDao: ChapterContentDao,
+    private val extensionManager: ExtensionManager
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
     // ===================== Opérations réseau =====================
 
+    /** Vérifie que la source est activée avant tout appel réseau. */
+    private fun requireSourceEnabled() {
+        if (!extensionManager.isSourceEnabled(source.id)) {
+            throw SourceDisabledException(source.name)
+        }
+    }
+
     /** Parcourir les novels depuis la source. */
     suspend fun browseNovels(page: Int, genre: String? = null, status: String? = null, sort: String? = null, order: String? = null): List<Novel> {
+        requireSourceEnabled()
         return source.getBrowseList(page = page, genre = genre, status = status, sort = sort, order = order)
     }
 
     /** Rechercher des novels. */
     suspend fun searchNovels(query: String, page: Int = 1): List<Novel> {
+        requireSourceEnabled()
         return source.search(query, page)
     }
 
     /** Dernières mises à jour depuis la source. */
     suspend fun getLatestUpdates(page: Int = 1): List<ChapterPreview> {
+        requireSourceEnabled()
         return source.getLatestUpdates(page)
     }
 
     /** Détails d'un novel depuis la source. */
     suspend fun getNovelDetails(slug: String): Novel {
+        requireSourceEnabled()
         return source.getNovelDetails(slug)
+    }
+
+    /**
+     * Genres du catalogue avec compteurs (endpoint /api/genres de la source).
+     * Utilisé pour les chips de filtre de l'écran Parcourir.
+     * Retourne une liste vide si la source ne les expose pas.
+     */
+    suspend fun getSourceGenres(): List<SourceGenre> {
+        requireSourceEnabled()
+        return source.getGenres()
     }
 
     /** Liste des chapitres d'un novel depuis la source. */
     suspend fun getChapterList(slug: String): List<ChapterPreview> {
+        requireSourceEnabled()
         return source.getChapterList(slug)
     }
 
     /** Contenu d'un chapitre depuis la source. */
     suspend fun getChapterContent(url: String): ChapterContent {
+        requireSourceEnabled()
         return source.getChapterContent(url)
     }
 
@@ -120,24 +147,55 @@ class NovelRepository @Inject constructor(
         return chapterDao.getChaptersForNovel(novelSlug)
     }
 
-    /** Sauvegarde la liste des chapitres en local. */
+    /**
+     * Sauvegarde la liste des chapitres en local SANS perdre l'état de lecture.
+     *
+     * Pour chaque chapitre distant :
+     * - s'il existe déjà → UPDATE en conservant isRead, readAt, scrollPosition,
+     *   isDownloaded (seuls les métadonnées distantes sont rafraîchies) ;
+     * - sinon → INSERT (IGNORE) d'une nouvelle ligne.
+     *
+     * L'UPDATE (contrairement à INSERT OR REPLACE) ne supprime pas la ligne,
+     * donc la cascade ON DELETE de chapter_content n'est PAS déclenchée et
+     * le contenu téléchargé en DB est préservé.
+     */
     suspend fun cacheChapters(
         novelSlug: String,
         chapters: List<ChapterPreview>,
         novelTitle: String = ""  // Titre lisible pour l'historique
     ) {
-        val entities = chapters.map { preview ->
-            ChapterEntity(
-                id = chapterId(novelSlug, preview.chapterNumber),
-                novelSlug = novelSlug,
-                novelTitle = novelTitle,
-                chapterNumber = preview.chapterNumber,
-                title = preview.title,
-                url = preview.url,
-                publishedAt = preview.publishedAt
-            )
+        val existing = chapterDao.getChaptersForNovelOnce(novelSlug).associateBy { it.id }
+        val toInsert = mutableListOf<ChapterEntity>()
+        val toUpdate = mutableListOf<ChapterEntity>()
+
+        for (preview in chapters) {
+            val id = chapterId(novelSlug, preview.chapterNumber)
+            val old = existing[id]
+            if (old != null) {
+                toUpdate.add(
+                    old.copy(
+                        title = preview.title,
+                        url = preview.url,
+                        publishedAt = preview.publishedAt,
+                        novelTitle = if (novelTitle.isNotBlank()) novelTitle else old.novelTitle
+                    )
+                )
+            } else {
+                toInsert.add(
+                    ChapterEntity(
+                        id = id,
+                        novelSlug = novelSlug,
+                        novelTitle = novelTitle,
+                        chapterNumber = preview.chapterNumber,
+                        title = preview.title,
+                        url = preview.url,
+                        publishedAt = preview.publishedAt
+                    )
+                )
+            }
         }
-        chapterDao.insertChapters(entities)
+
+        chapterDao.upsertChapters(toInsert, toUpdate)
     }
 
     /** Marque un chapitre comme lu. */
@@ -153,6 +211,11 @@ class NovelRepository @Inject constructor(
     /** Sauvegarde la position de scroll pour reprise de lecture. */
     suspend fun saveScrollPosition(chapterId: String, position: Int) {
         chapterDao.updateScrollPosition(chapterId, position)
+    }
+
+    /** Position de scroll sauvegardée d'un chapitre (0 si inconnue). */
+    suspend fun getScrollPosition(chapterId: String): Int {
+        return chapterDao.getChapterById(chapterId)?.scrollPosition ?: 0
     }
 
     /** Historique récent (30 derniers chapitres lus). */
@@ -258,6 +321,10 @@ class NovelRepository @Inject constructor(
         }
     }
 }
+
+/** Levée quand la source a été désactivée dans l'écran Extensions. */
+class SourceDisabledException(sourceName: String) :
+    Exception("La source « $sourceName » est désactivée. Active-la dans Paramètres → Extensions.")
 
 // ===================== Modèles de sérialisation pour le cache =====================
 

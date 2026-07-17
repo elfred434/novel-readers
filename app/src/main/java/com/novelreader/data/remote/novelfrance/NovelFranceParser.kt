@@ -324,10 +324,13 @@ class NovelFranceParser {
     /**
      * Extrait le numéro de chapitre depuis une URL.
      * "https://.../chapter-42" -> 42
+     * Fallback : premier groupe de chiffres du dernier segment de l'URL
+     * (tolère les slugs non standard comme "chapitre-42-final").
      */
     private fun extractChapterNumber(url: String): Int {
-        val regex = Regex("chapter-(\\d+)(?:/)?$")
-        return regex.find(url)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+        Regex("chapter-(\\d+)(?:/)?$").find(url)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
+        val lastSegment = url.trimEnd('/').substringAfterLast('/')
+        return Regex("(\\d+)").find(lastSegment)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
     }
 
     // ========================================================================

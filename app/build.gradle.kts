@@ -29,13 +29,19 @@ android {
     }
 
     signingConfigs {
+        // SÉCURITÉ : aucun mot de passe en clair. Le keystore et ses secrets
+        // viennent de l'environnement (CI : secrets GitHub ; local : variables d'env).
+        // Sans secrets valides, le build release retombe sur la signature debug.
         val keystoreFile = rootProject.file("novelreader.keystore")
-        if (keystoreFile.exists()) {
+        val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+        val keyAlias = System.getenv("KEY_ALIAS")
+        val keyPassword = System.getenv("KEY_PASSWORD")
+        if (keystoreFile.exists() && !keystorePassword.isNullOrEmpty() && !keyAlias.isNullOrEmpty() && !keyPassword.isNullOrEmpty()) {
             create("release") {
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "novelreader"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "novelreader"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "novelreader"
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
             }
         }
     }

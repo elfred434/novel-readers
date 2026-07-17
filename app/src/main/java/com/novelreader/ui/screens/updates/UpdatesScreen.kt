@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -84,10 +84,11 @@ fun UpdatesScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
-                    items(
+                    itemsIndexed(
                         items = uiState.updates,
-                        key = { "${it.novelSlug}_${it.chapterNumber}" }
-                    ) { update ->
+                        // Index inclus : /latest peut lister 2× le même chapitre → évite le crash de clé dupliquée
+                        key = { index, item -> "${item.novelSlug}_${item.chapterNumber}_$index" }
+                    ) { _, update ->
                         UpdateItem(
                             novelTitle = update.novelTitle ?: update.novelSlug,
                             chapterTitle = update.title,

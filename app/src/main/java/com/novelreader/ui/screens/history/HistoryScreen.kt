@@ -36,6 +36,7 @@ import com.novelreader.ui.components.LoadingIndicator
 @Composable
 fun HistoryScreen(
     onNovelClick: (String) -> Unit,
+    onChapterClick: (String) -> Unit = {},
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -84,7 +85,7 @@ fun HistoryScreen(
                             novelTitle = chapter.novelTitle.ifBlank { chapter.novelSlug },
                             chapterNumber = chapter.chapterNumber,
                             chapterTitle = chapter.title,
-                            onClick = { onNovelClick(chapter.novelSlug) }
+                            onClick = { if (chapter.url.isNotBlank()) onChapterClick(chapter.url) else onNovelClick(chapter.novelSlug) }
                         )
                     }
                 }

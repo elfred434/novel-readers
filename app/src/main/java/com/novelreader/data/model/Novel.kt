@@ -32,12 +32,16 @@ data class Novel(
 enum class NovelStatus {
     ONGOING,
     COMPLETED,
+    HIATUS,
+    CANCELLED,
     UNKNOWN;
 
     companion object {
         fun fromString(value: String): NovelStatus = when (value.uppercase()) {
             "ONGOING", "EN COURS" -> ONGOING
             "COMPLETED", "TERMINÉ", "TERMINE" -> COMPLETED
+            "HIATUS", "EN PAUSE", "PAUSE" -> HIATUS
+            "CANCELLED", "CANCELED", "DROPPED", "ABANDONNÉ", "ABANDONNE", "ANNULÉ", "ANNULE" -> CANCELLED
             else -> UNKNOWN
         }
     }

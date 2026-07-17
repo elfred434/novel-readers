@@ -37,6 +37,7 @@ import com.novelreader.ui.components.*
 fun LibraryScreen(
     onNovelClick: (String) -> Unit,
     onSettingsClick: () -> Unit = {},
+    onChapterClick: (String) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -106,7 +107,7 @@ fun LibraryScreen(
                                 ContinueReadingCard(
                                     novelTitle = ch.novelTitle.ifBlank { ch.novelSlug },
                                     chapterNumber = ch.chapterNumber,
-                                    onClick = { onNovelClick(ch.novelSlug) }
+                                    onClick = { if (ch.url.isNotBlank()) onChapterClick(ch.url) else onNovelClick(ch.novelSlug) }
                                 )
                                 Spacer(Modifier.height(16.dp))
                             }

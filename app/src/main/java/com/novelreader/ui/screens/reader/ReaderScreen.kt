@@ -44,8 +44,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +63,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novelreader.ui.components.ErrorView
 import com.novelreader.ui.components.LoadingIndicator
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,19 +75,30 @@ fun ReaderScreen(
     val listState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var controlsVisible by remember { mutableIntStateOf(1) }
-    val scope = rememberCoroutineScope()
+
+    // Réinitialisé à chaque changement de chapitre (clé = URL courante)
+    var scrollRestored by rememberSaveable(uiState.currentChapterUrl) { mutableStateOf(false) }
 
     LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
         val pos = listState.firstVisibleItemIndex * 10000 + listState.firstVisibleItemScrollOffset
         viewModel.saveScrollPosition(pos)
     }
 
-    LaunchedEffect(uiState.currentChapterUrl) {
-        if (!uiState.isLoading && uiState.chapterContent != null) listState.scrollToItem(0)
+    // Restaure la position de scroll sauvegardée à l'ouverture du chapitre
+    LaunchedEffect(uiState.chapterContent, scrollRestored) {
+        val content = uiState.chapterContent ?: return@LaunchedEffect
+        if (!scrollRestored && !uiState.isLoading) {
+            if (uiState.initialScrollPosition > 0) {
+                val index = (uiState.initialScrollPosition / 10000).coerceIn(0, content.paragraphs.size + 1)
+                val offset = uiState.initialScrollPosition % 10000
+                listState.scrollToItem(index, offset)
+            }
+            scrollRestored = true
+        }
     }
 
     val handleBack: () -> Unit = {
-        scope.launch { viewModel.persistScrollPosition() }
+        viewModel.persistScrollPosition() // scope du ViewModel : survit à la sortie de l'écran
         onBack()
     }
 
