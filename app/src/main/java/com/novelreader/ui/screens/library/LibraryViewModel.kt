@@ -7,6 +7,7 @@ import com.novelreader.data.local.entity.CategoryEntity
 import com.novelreader.data.local.entity.ChapterEntity
 import com.novelreader.data.local.entity.NovelEntity
 import com.novelreader.data.repository.NovelRepository
+import com.novelreader.data.storage.StorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +42,8 @@ enum class ViewMode { GRID, LIST }
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val repository: NovelRepository,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val storageManager: StorageManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -98,7 +100,11 @@ class LibraryViewModel @Inject constructor(
     }
     fun confirmRemoveFromLibrary() {
         viewModelScope.launch {
-            repository.removeNovelFromLibrary(_uiState.value.removeSlug)
+            val slug = _uiState.value.removeSlug
+            repository.removeNovelFromLibrary(slug)
+            // Supprimer aussi les fichiers téléchargés (sinon ils restent orphelins
+            // sur le disque et dans l'écran Téléchargements)
+            storageManager.deleteNovelFiles(slug)
             _uiState.update { it.copy(showRemoveDialog = false) }
         }
     }

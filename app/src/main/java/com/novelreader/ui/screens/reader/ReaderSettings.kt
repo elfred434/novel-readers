@@ -22,10 +22,12 @@ enum class ReaderTheme(val displayName: String) {
 
 data class ReaderColors(val background: Color, val text: Color, val accent: Color) {
     companion object {
+        // Couleurs alignées sur le design system Studio Noir (ui/theme/Color.kt) :
+        // DARK = ReaderBackground #131313 / ReaderText #E0DED8, accent = Primary #CC3344.
         fun fromTheme(theme: ReaderTheme): ReaderColors = when (theme) {
-            ReaderTheme.DARK -> ReaderColors(Color(0xFF1A1B1E), Color(0xFFE8E8EA), Color(0xFFE11D48))
-            ReaderTheme.LIGHT -> ReaderColors(Color(0xFFF8F8FA), Color(0xFF1A1B1E), Color(0xFFBE123C))
-            ReaderTheme.SEPIA -> ReaderColors(Color(0xFFF5F0E8), Color(0xFF3E3A35), Color(0xFF8B4513))
+            ReaderTheme.DARK -> ReaderColors(Color(0xFF131313), Color(0xFFE0DED8), Color(0xFFCC3344))
+            ReaderTheme.LIGHT -> ReaderColors(Color(0xFFF8F8FA), Color(0xFF1A1B1E), Color(0xFFB82A3A))
+            ReaderTheme.SEPIA -> ReaderColors(Color(0xFFF8F4E8), Color(0xFF3E3A35), Color(0xFF8B4513))
         }
     }
 }

@@ -1,12 +1,15 @@
 package com.novelreader.data.extension
 
+import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.remote.source.NovelSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.launch
 
 /**
  * Gestionnaire des sources/extensions.
@@ -16,20 +19,38 @@ import javax.inject.Singleton
  * L'architecture prévoit le chargement dynamique (DexClassLoader)
  * pour les phases futures.
  *
+ * Les sources désactivées sont PERSISTÉES (DataStore) et prises en compte
+ * par le repository : toute opération réseau sur une source désactivée
+ * lève une SourceDisabledException.
+ *
+ * Note : construit manuellement par le module Hilt (AppModule) — pas de
+ * `@Inject constructor` pour éviter la création d'une seconde instance vide.
+ *
  * @property sources Liste des sources disponibles (enabled + disabled)
- * @property enabledSources Liste des sources activées
  */
-@Singleton
-class ExtensionManager @Inject constructor() {
+class ExtensionManager(
+    private val prefs: PreferencesManager
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _sources = MutableStateFlow<List<NovelSource>>(emptyList())
     val sources: StateFlow<List<NovelSource>> = _sources.asStateFlow()
 
-    private val _enabledSourceIds = MutableStateFlow<Set<Long>>(emptySet())
-    val enabledSourceIds: StateFlow<Set<Long>> = _enabledSourceIds.asStateFlow()
+    private val _disabledSourceIds = MutableStateFlow<Set<Long>>(emptySet())
+    val disabledSourceIds: StateFlow<Set<Long>> = _disabledSourceIds.asStateFlow()
 
+    init {
+        // Restaure les sources désactivées persistées
+        scope.launch {
+            prefs.disabledSourceIds.collect { ids ->
+                _disabledSourceIds.value = ids
+            }
+        }
+    }
+
+    /** Sources actuellement activées. */
     val enabledSources: List<NovelSource>
-        get() = _sources.value.filter { it.id in _enabledSourceIds.value }
+        get() = _sources.value.filter { isSourceEnabled(it.id) }
 
     /**
      * Enregistre une source (appelé au démarrage par DI).
@@ -41,27 +62,22 @@ class ExtensionManager @Inject constructor() {
             if (index >= 0) updated[index] = source else updated.add(source)
             updated
         }
-        _enabledSourceIds.update { it + source.id }
     }
 
     /**
-     * Active ou désactive une source.
+     * Active ou désactive une source (persisté en DataStore).
      */
     fun toggleSource(sourceId: Long, enabled: Boolean) {
-        _enabledSourceIds.update {
-            if (enabled) it + sourceId else it - sourceId
-        }
+        scope.launch { prefs.setSourceDisabled(sourceId, !enabled) }
     }
+
+    /** Vrai si la source est activée (par défaut : oui). */
+    fun isSourceEnabled(id: Long): Boolean = id !in _disabledSourceIds.value
 
     /**
      * Récupère une source par son ID.
      */
     fun getSource(id: Long): NovelSource? = _sources.value.find { it.id == id }
-
-    /**
-     * Récupère une source par son nom.
-     */
-    fun getSourceByName(name: String): NovelSource? = _sources.value.find { it.name == name }
 
     /**
      * Liste des informations d'extensions pour l'UI.
@@ -77,16 +93,8 @@ class ExtensionManager @Inject constructor() {
                 version = source.version,
                 supportsLatest = source.supportsLatest,
                 isInstalled = true,
-                isEnabled = source.id in _enabledSourceIds.value
+                isEnabled = isSourceEnabled(source.id)
             )
         }
-    }
-
-    /**
-     * Désinstalle une source (supprime de la liste).
-     */
-    fun uninstallSource(sourceId: Long) {
-        _sources.update { it.filter { s -> s.id != sourceId } }
-        _enabledSourceIds.update { it - sourceId }
     }
 }

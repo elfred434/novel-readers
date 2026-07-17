@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.novelreader.data.model.Novel
 import com.novelreader.data.repository.NovelRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,12 +15,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Options de tri alignées sur l'API réelle de NovelFrance.
+ * Seules les valeurs "popular" et "rating" sont effectives côté serveur
+ * (vérifié le 17/07/2026) ; toute autre valeur est ignorée et retombe
+ * sur le tri par défaut (dernières mises à jour).
+ */
 enum class SortOption(val label: String, val sort: String?, val order: String?) {
-    DEFAULT("Par défaut", null, null),
-    POPULARITY("Popularité", "views", "desc"),
-    RATING("Meilleure note", "rating", "desc"),
-    NEW("Nouveautés", "createdAt", "desc"),
-    UPDATED("Mise à jour", "updatedAt", "desc")
+    DEFAULT("Dernière mise à jour", null, null),
+    POPULARITY("Les plus populaires", "popular", "desc"),
+    RATING("Mieux notés", "rating", "desc")
 }
 
 enum class StatusFilter(val label: String, val apiValue: String?) {
@@ -52,13 +59,38 @@ class BrowseViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(BrowseUiState())
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
 
+    /** Job de recherche courant — annulé à chaque nouvelle frappe. */
+    private var searchJob: Job? = null
+
     private companion object {
-        const val MAX_SEARCH_PAGES = 50
         const val SEARCH_PAGE_SIZE = 20
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
 
     init {
+        loadGenres()
         loadNovels()
+    }
+
+    /**
+     * Charge la liste complète des genres depuis l'API (/api/genres) —
+     * avec les compteurs réels — au lieu de les extraire des 20 premiers
+     * novels de la page courante.
+     */
+    private fun loadGenres() {
+        viewModelScope.launch {
+            try {
+                val genres = repository.getSourceGenres()
+                    .filter { it.novelCount > 0 }
+                    .sortedByDescending { it.novelCount }
+                    .map { GenreFilterOption(name = it.name, slug = it.slug, count = it.novelCount) }
+                if (genres.isNotEmpty()) {
+                    _uiState.update { it.copy(availableGenres = genres) }
+                }
+            } catch (e: Exception) {
+                // Non bloquant : les chips de genre ne seront simplement pas affichés
+            }
+        }
     }
 
     fun loadNovels() {
@@ -74,20 +106,12 @@ class BrowseViewModel @Inject constructor(
                     genre = state.genreSlug
                 )
 
-                // Extraire les genres disponibles (P3)
-                val genres = novels.flatMap { n ->
-                    n.genres.map { g -> g.lowercase().replace(" ", "-") to g }
-                }.distinctBy { it.first }.map { (slug, name) ->
-                    GenreFilterOption(name = name, slug = slug)
-                }
-
                 _uiState.update {
                     it.copy(
                         novels = novels,
                         isLoading = false,
                         currentPage = 1,
-                        hasMore = novels.size >= SEARCH_PAGE_SIZE,
-                        availableGenres = genres.take(20) // max 20 genres en chips
+                        hasMore = novels.size >= SEARCH_PAGE_SIZE
                     )
                 }
             } catch (e: Exception) {
@@ -140,43 +164,36 @@ class BrowseViewModel @Inject constructor(
         loadNovels()
     }
 
+    /**
+     * Recherche avec DEBOUNCE : attend 300 ms après la dernière frappe avant
+     * d'appeler l'API. La recherche précédente est ANNULÉE à chaque frappe
+     * (plus de course entre résultats).
+     */
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
 
         if (query.isBlank()) {
             _uiState.update { it.copy(searchResults = null, isSearching = false) }
             return
         }
 
-        performSearch(query.trim())
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            performSearch(query.trim())
+        }
     }
 
-    private fun performSearch(query: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, error = null) }
-            val results = mutableListOf<Novel>()
-            val queryLower = query.lowercase()
-
-            try {
-                for (page in 1..MAX_SEARCH_PAGES) {
-                    val novels = repository.browseNovels(page = page)
-
-                    val matches = novels.filter { novel ->
-                        novel.title.lowercase().contains(queryLower) ||
-                        novel.author.lowercase().contains(queryLower)
-                    }
-                    results.addAll(matches)
-
-                    if (novels.size < SEARCH_PAGE_SIZE) break
-                    if (results.size >= 50) break
-                }
-            } catch (e: Exception) {
-                if (results.isEmpty()) {
-                    _uiState.update { it.copy(isSearching = false, error = "Erreur lors de la recherche") }
-                    return@launch
-                }
-            }
-
+    /**
+     * Recherche via l'endpoint dédié du site (/api/search?q=…) —
+     * 1 requête réseau au lieu de télécharger jusqu'à 50 pages de catalogue.
+     * NB : le paramètre `search` de /api/novels est ignoré par le serveur,
+     * c'est bien /api/search qui effectue la recherche plein-texte.
+     */
+    private suspend fun performSearch(query: String) {
+        _uiState.update { it.copy(isSearching = true, error = null) }
+        try {
+            val results = repository.searchNovels(query, page = 1)
             _uiState.update {
                 it.copy(
                     searchResults = results,
@@ -184,6 +201,11 @@ class BrowseViewModel @Inject constructor(
                     error = null
                 )
             }
+        } catch (e: CancellationException) {
+            // Recherche remplacée par une frappe plus récente — ne pas toucher l'état
+            throw e
+        } catch (e: Exception) {
+            _uiState.update { it.copy(isSearching = false, error = "Erreur lors de la recherche") }
         }
     }
 

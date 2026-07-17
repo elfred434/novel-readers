@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.novelreader.ui.theme.StatusCancelled
 import com.novelreader.ui.theme.StatusCompleted
 import com.novelreader.ui.theme.StatusHiatus
 import com.novelreader.ui.theme.StatusOngoing
@@ -28,6 +29,8 @@ fun StatusBadge(status: NovelStatus, modifier: Modifier = Modifier) {
     val (text, color) = when (status) {
         NovelStatus.ONGOING -> "En cours" to StatusOngoing
         NovelStatus.COMPLETED -> "Terminé" to StatusCompleted
+        NovelStatus.HIATUS -> "En pause" to StatusHiatus
+        NovelStatus.CANCELLED -> "Abandonné" to StatusCancelled
         NovelStatus.UNKNOWN -> "" to Color.Transparent
     }
     if (text.isBlank()) return
@@ -124,6 +127,8 @@ fun StatusChip(status: NovelStatus, modifier: Modifier = Modifier) {
     val (text, color) = when (status) {
         NovelStatus.ONGOING -> "En cours" to StatusOngoing
         NovelStatus.COMPLETED -> "Terminé" to StatusCompleted
+        NovelStatus.HIATUS -> "En pause" to StatusHiatus
+        NovelStatus.CANCELLED -> "Abandonné" to StatusCancelled
         NovelStatus.UNKNOWN -> "?" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Box(

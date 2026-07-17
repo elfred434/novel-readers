@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fond de démarrage : identique à SurfaceDark du thème Compose (Color.kt) -->
+    <color name="splash_background">#FF050505</color>
+</resources>

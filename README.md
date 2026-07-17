@@ -4,7 +4,7 @@
 
 | Build | Version |
 |-------|---------|
-| [![Build](https://github.com/tonuser/NovelReader/actions/workflows/build.yml/badge.svg)](https://github.com/tonuser/NovelReader/actions) | **v1.0.0** |
+| [![Build](https://github.com/elfred434/novel-readers/actions/workflows/build.yml/badge.svg)](https://github.com/elfred434/novel-readers/actions) | **v1.0.0** |
 
 ## ✨ Fonctionnalités
 
@@ -24,13 +24,13 @@
 ## 🚀 Installation
 
 ### Depuis les releases
-1. Va dans [Releases](https://github.com/tonuser/NovelReader/releases)
+1. Va dans [Releases](https://github.com/elfred434/novel-readers/releases)
 2. Télécharge le dernier `NovelReader-vX.X.X.apk`
 3. Ouvre le fichier sur ton Android (autorise les installations tierces si nécessaire)
 
 ### Depuis les sources
 ```bash
-git clone https://github.com/tonuser/NovelReader.git
+git clone https://github.com/elfred434/novel-readers.git
 cd NovelReader
 ./gradlew assembleRelease
 # APK généré dans app/build/outputs/apk/release/

@@ -17,6 +17,5 @@ data class NovelEntity(
     val sourceUrl: String,
     val addedAt: Long = System.currentTimeMillis(),
     val lastChapterRead: Int? = null,
-    val unreadChapterCount: Int = 0,
-    val storageFolderName: String = ""  // Nom du dossier de stockage (basé sur le slug, stable)
+    val unreadChapterCount: Int = 0
 )

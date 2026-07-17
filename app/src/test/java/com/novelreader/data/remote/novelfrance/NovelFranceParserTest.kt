@@ -3,6 +3,7 @@ package com.novelreader.data.remote.novelfrance
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -132,8 +133,9 @@ class NovelFranceParserTest {
         // Given
         val api = NovelFranceApi(client)
 
-        // When — rechercher "Omniscient"
-        val results = api.getNovels(search = "Omniscient", limit = 5)
+        // When — rechercher "Omniscient" via l'endpoint dédié /api/search
+        // (le paramètre `search` de /api/novels est IGNORÉ par le serveur)
+        val results = api.searchNovels("Omniscient", limit = 5)
 
         // Then
         println("=== SEARCH RESULTS ===")
@@ -143,6 +145,82 @@ class NovelFranceParserTest {
         }
 
         assertTrue("La recherche doit retourner des résultats", results.isNotEmpty())
+        assertTrue(
+            "Les résultats doivent correspondre à la requête",
+            results.any { it.title.contains("Omniscient", ignoreCase = true) }
+        )
+    }
+
+    @Test
+    fun `browse filters by genre via API`() = runTest {
+        // Given — le paramètre effectif est `genres` (pluriel)
+        val api = NovelFranceApi(client)
+
+        // When
+        val actionNovels = api.getNovels(page = 1, limit = 5, genre = "action")
+
+        // Then — les résultats doivent tous avoir le genre Action
+        println("=== GENRE FILTER (action) ===")
+        actionNovels.forEach { n -> println("  ${n.title} — ${n.genres}") }
+        assertTrue("Le filtre genre doit retourner des novels", actionNovels.isNotEmpty())
+        assertTrue(
+            "Chaque résultat doit avoir le genre Action",
+            actionNovels.all { n -> n.genres.any { it.equals("Action", ignoreCase = true) } }
+        )
+    }
+
+    @Test
+    fun `latest chapters via API`() = runTest {
+        // Given — endpoint JSON /api/chapters/latest (remplace le scraping /latest)
+        val api = NovelFranceApi(client)
+
+        // When
+        val latest = api.getLatestChapters(skip = 0, take = 10)
+
+        // Then
+        println("=== LATEST (API) ===")
+        latest.forEach { u -> println("  ${u.novelTitle} — Ch.${u.chapterNumber} — ${u.url}") }
+        assertTrue("Le flux latest doit contenir des chapitres", latest.isNotEmpty())
+        assertTrue("Le slug du novel doit être présent", latest.first().novelSlug.isNotBlank())
+        assertTrue("Le titre du novel doit être présent", !latest.first().novelTitle.isNullOrBlank())
+        assertTrue("L'URL doit pointer vers un chapitre", latest.first().url.contains("/novel/"))
+    }
+
+    @Test
+    fun `chapter content via API`() = runTest {
+        // Given — endpoint JSON /api/chapters/{novelSlug}/{chapterSlug}
+        val api = NovelFranceApi(client)
+
+        // When
+        val content = api.getChapterContent("omniscient-readers-viewpoint", "chapter-1")
+
+        // Then
+        println("=== CHAPTER CONTENT (API) ===")
+        println("Titre: ${content.chapterTitle} — Novel: ${content.novelTitle}")
+        println("Paragraphes: ${content.paragraphs.size} — Suivant: ${content.nextChapterUrl}")
+        assertTrue("Le titre du chapitre ne doit pas être vide", content.chapterTitle.isNotBlank())
+        assertTrue("Le titre du novel ne doit pas être vide", content.novelTitle.isNotBlank())
+        assertTrue("Il doit y avoir des paragraphes", content.paragraphs.isNotEmpty())
+        assertTrue(
+            "Le 1er paragraphe doit contenir du texte",
+            content.paragraphs.first().htmlContent.isNotBlank()
+        )
+        assertNotNull("Il doit y avoir un chapitre suivant", content.nextChapterUrl)
+    }
+
+    @Test
+    fun `genres via API`() = runTest {
+        // Given — endpoint /api/genres pour les chips de filtre
+        val api = NovelFranceApi(client)
+
+        // When
+        val genres = api.getGenres()
+
+        // Then
+        println("=== GENRES (API) ===")
+        println("${genres.size} genres — top 5: ${genres.take(5).map { "${it.name}(${it.novelCount})" }}")
+        assertTrue("Le catalogue doit exposer des genres", genres.isNotEmpty())
+        assertTrue("Les slugs doivent être présents", genres.all { it.slug.isNotBlank() })
     }
 
     @Test

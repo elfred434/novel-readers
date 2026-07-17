@@ -86,12 +86,18 @@ fun NovelReaderNavigation() {
             composable(Screen.Library.route) {
                 LibraryScreen(
                     onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) },
-                    onSettingsClick = { navController.navigate(Screen.Settings.route) }
+                    onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                    onChapterClick = { chapterUrl -> navController.navigate(Screen.Reader.createRoute(chapterUrl)) }
                 )
             }
             composable(Screen.Browse.route) { BrowseScreen(onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) }) }
             composable(Screen.Updates.route) { UpdatesScreen(onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) }) }
-            composable(Screen.History.route) { HistoryScreen(onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) }) }
+            composable(Screen.History.route) {
+                HistoryScreen(
+                    onNovelClick = { slug -> navController.navigate(Screen.Detail.createRoute(slug)) },
+                    onChapterClick = { chapterUrl -> navController.navigate(Screen.Reader.createRoute(chapterUrl)) }
+                )
+            }
             composable(Screen.Detail.route, arguments = listOf(navArgument("slug") { type = NavType.StringType })) {
                 DetailScreen(onBack = { navController.popBackStack() }, onChapterClick = { chapterUrl -> navController.navigate(Screen.Reader.createRoute(chapterUrl)) })
             }

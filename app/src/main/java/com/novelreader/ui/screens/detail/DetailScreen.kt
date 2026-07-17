@@ -233,12 +233,12 @@ fun DetailScreen(
                         val isDl = ch.chapterNumber in downloaded
                         val isDling = ch.chapterNumber in downloading
                         val isSelected = ch.chapterNumber in uiState.selectedChapters
-                        val isLastRead = ch.chapterNumber == uiState.lastReadChapterNumber
+                        val isRead = ch.chapterNumber in uiState.readChapters
 
                         ChapterCard(
                             chapterNumber = ch.chapterNumber, title = ch.title,
                             isDownloaded = isDl, isDownloading = isDling, isSelected = isSelected,
-                            isSelectionMode = uiState.isSelectionMode, isLastRead = isLastRead,
+                            isSelectionMode = uiState.isSelectionMode, isRead = isRead,
                             wordCount = ch.wordCount,
                             onClick = {
                                 if (uiState.isSelectionMode) viewModel.toggleChapterSelection(ch.chapterNumber)
@@ -294,7 +294,7 @@ fun DetailScreen(
 private fun ChapterCard(
     chapterNumber: Int, title: String,
     isDownloaded: Boolean, isDownloading: Boolean, isSelected: Boolean,
-    isSelectionMode: Boolean, isLastRead: Boolean,
+    isSelectionMode: Boolean, isRead: Boolean,
     wordCount: Int? = null,
     onClick: () -> Unit, onLongClick: () -> Unit,
     onDownload: () -> Unit, onDelete: () -> Unit, onMarkUnread: () -> Unit
@@ -316,8 +316,14 @@ private fun ChapterCard(
             Text("#$chapterNumber", style = MaterialTheme.typography.titleMedium, color = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.width(40.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(title.ifBlank { "Chapitre $chapterNumber" }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (isLastRead) {
+                    Text(
+                        title.ifBlank { "Chapitre $chapterNumber" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isRead) {
                         Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) {
                             Text("Lu", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp), modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
                         }

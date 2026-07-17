@@ -44,6 +44,7 @@ data class SettingsUiState(
     val isOnWifi: Boolean = false,
     val updateAvailable: String? = null,   // null = pas de maj, vide = vérification, version = disponible
     val updateChangelog: String? = null,
+    val updateApkUrl: String? = null,      // URL de l'APK (évite un second appel réseau au téléchargement)
     val isDownloadingUpdate: Boolean = false,
     val currentVersion: String = ""
 )
@@ -57,7 +58,7 @@ class SettingsViewModel @Inject constructor(
     private val storageManager: StorageManager,
     private val networkManager: NetworkStateManager,
     private val app: Application,
-    private val updateChecker: com.novelreader.data.update.AppUpdateChecker
+    private val updateChecker: AppUpdateChecker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -69,10 +70,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.notificationsEnabled.collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } } }
         viewModelScope.launch { prefs.downloadMaxConcurrent.collect { v -> _uiState.update { it.copy(downloadMaxConcurrent = v) } } }
         viewModelScope.launch { prefs.downloadOnWifiOnly.collect { v -> _uiState.update { it.copy(downloadOnWifiOnly = v) } } }
-        viewModelScope.launch { prefs.wifiHighDataMode.collect { v ->
-            _uiState.update { it.copy(wifiHighDataMode = v) }
-            downloadManager.highDataModeEnabled = v
-        } }
+        viewModelScope.launch { prefs.wifiHighDataMode.collect { v -> _uiState.update { it.copy(wifiHighDataMode = v) } } }
         viewModelScope.launch { extensionManager.sources.collect { sources -> _uiState.update { it.copy(extensionCount = sources.size) } } }
         viewModelScope.launch {
             downloadManager.queue.collect { queue ->
@@ -112,32 +110,30 @@ class SettingsViewModel @Inject constructor(
             if (update != null) {
                 _uiState.update { it.copy(
                     updateAvailable = update.versionName,
-                    updateChangelog = update.changelog
+                    updateChangelog = update.changelog,
+                    updateApkUrl = update.apkUrl
                 )}
             } else {
-                _uiState.update { it.copy(updateAvailable = null) }
+                _uiState.update { it.copy(updateAvailable = null, updateApkUrl = null) }
             }
         }
     }
 
     fun downloadUpdate() {
-        val version = _uiState.value.updateAvailable ?: return
+        // Réutilise l'URL obtenue lors de la vérification (pas de second appel réseau)
+        val apkUrl = _uiState.value.updateApkUrl ?: return
         _uiState.update { it.copy(isDownloadingUpdate = true) }
 
-        viewModelScope.launch {
-            try {
-                // Récupérer l'URL depuis le checker
-                val update = updateChecker.checkForUpdate() ?: return@launch
-                val installer = AppUpdateInstaller(app)
-                installer.downloadAndInstall(
-                    apkUrl = update.apkUrl,
-                    onComplete = {
-                        _uiState.update { it.copy(isDownloadingUpdate = false) }
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isDownloadingUpdate = false) }
-            }
+        try {
+            val installer = AppUpdateInstaller(app)
+            installer.downloadAndInstall(
+                apkUrl = apkUrl,
+                onComplete = {
+                    _uiState.update { it.copy(isDownloadingUpdate = false) }
+                }
+            )
+        } catch (e: Exception) {
+            _uiState.update { it.copy(isDownloadingUpdate = false) }
         }
     }
 
@@ -163,24 +159,32 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setThemeType(type: Int) { viewModelScope.launch { prefs.setThemeType(type) } }
+
+    /**
+     * Persiste l'intervalle. La replanification du worker est automatique :
+     * NovelReaderApp collecte cette préférence et appelle UpdateWorker.schedule()
+     * (ExistingPeriodicWorkPolicy.UPDATE) à chaque changement.
+     */
     fun setUpdateInterval(h: Int) { viewModelScope.launch { prefs.setUpdateIntervalHours(h) } }
+
     fun toggleNotifications() { viewModelScope.launch { prefs.setNotificationsEnabled(!_uiState.value.notificationsEnabled) } }
-    fun setDownloadMaxConcurrent(n: Int) {
-        viewModelScope.launch {
-            prefs.setDownloadMaxConcurrent(n)
-            downloadManager.userMaxConcurrent = n
-            // Recalcule immédiat
-            val onWifi = networkManager.isCurrentlyOnWifi()
-            downloadManager.highDataModeEnabled = _uiState.value.wifiHighDataMode
-        }
-    }
+
+    /**
+     * Persiste la simultanéité. DownloadManager collecte directement cette
+     * préférence — aucune synchronisation manuelle nécessaire ici.
+     */
+    fun setDownloadMaxConcurrent(n: Int) { viewModelScope.launch { prefs.setDownloadMaxConcurrent(n) } }
+
+    /** Persiste « WiFi uniquement » — appliqué directement par DownloadManager. */
     fun setDownloadOnWifiOnly(e: Boolean) { viewModelScope.launch { prefs.setDownloadOnWifiOnly(e) } }
+
     fun toggleWifiHighDataMode() {
         viewModelScope.launch {
             val newVal = !_uiState.value.wifiHighDataMode
             prefs.setWifiHighDataMode(newVal)
         }
     }
+
     fun retryFailedDownloads() {
         downloadManager.retryAllFailed()
         DownloadService.start(app)

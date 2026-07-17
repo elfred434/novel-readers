@@ -5,7 +5,7 @@ Merci de t'intéresser à ce projet ! 🎉
 ## 🤝 Comment contribuer
 
 ### Signaler un bug
-1. Vérifie que le bug n'a pas déjà été signalé dans [Issues](https://github.com/tonuser/NovelReader/issues)
+1. Vérifie que le bug n'a pas déjà été signalé dans [Issues](https://github.com/elfred434/novel-readers/issues)
 2. Ouvre une nouvelle issue avec :
    - Version de l'app (Paramètres → bas de page)
    - Appareil Android + version

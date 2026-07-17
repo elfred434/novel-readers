@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,10 +26,16 @@ class ExtensionsViewModel @Inject constructor(
     val uiState: StateFlow<ExtensionsUiState> = _uiState.asStateFlow()
 
     init {
+        // Recalcule la liste dès que les sources OU leur état d'activation changent
+        // (avant : seul `sources` était observé → le toggle ne rafraîchissait pas l'UI)
         viewModelScope.launch {
-            extensionManager.sources.collect {
-                _uiState.update { state -> state.copy(extensions = extensionManager.getExtensionInfos()) }
-            }
+            combine(
+                extensionManager.sources,
+                extensionManager.disabledSourceIds
+            ) { _, _ -> extensionManager.getExtensionInfos() }
+                .collect { infos ->
+                    _uiState.update { it.copy(extensions = infos) }
+                }
         }
     }
 

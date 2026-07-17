@@ -8,22 +8,25 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "novelreader_settings")
 
 class PreferencesManager(private val context: Context) {
 
+    // ===== Apparence =====
     val themeType: Flow<Int> = context.dataStore.data.map { it[KEY_THEME] ?: 0 }
     suspend fun setThemeType(type: Int) { context.dataStore.edit { it[KEY_THEME] = type } }
 
+    // ===== Mises à jour de la bibliothèque =====
     val updateIntervalHours: Flow<Int> = context.dataStore.data.map { it[KEY_UPDATE_INTERVAL] ?: 12 }
     suspend fun setUpdateIntervalHours(h: Int) { context.dataStore.edit { it[KEY_UPDATE_INTERVAL] = h } }
 
+    // ===== Lecteur (persistés et restaurés par ReaderViewModel) =====
     val readerFontSize: Flow<Int> = context.dataStore.data.map { it[KEY_READER_FONT_SIZE] ?: 18 }
     suspend fun setReaderFontSize(s: Int) { context.dataStore.edit { it[KEY_READER_FONT_SIZE] = s } }
 
@@ -42,9 +45,11 @@ class PreferencesManager(private val context: Context) {
     val readerPaginationMode: Flow<Boolean> = context.dataStore.data.map { it[KEY_READER_PAGINATION] ?: false }
     suspend fun setReaderPaginationMode(e: Boolean) { context.dataStore.edit { it[KEY_READER_PAGINATION] = e } }
 
+    // ===== Notifications =====
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_NOTIFICATIONS] ?: true }
     suspend fun setNotificationsEnabled(e: Boolean) { context.dataStore.edit { it[KEY_NOTIFICATIONS] = e } }
 
+    // ===== Téléchargements =====
     val downloadMaxConcurrent: Flow<Int> = context.dataStore.data.map { it[KEY_DOWNLOAD_MAX_CONCURRENT] ?: 2 }
     suspend fun setDownloadMaxConcurrent(n: Int) { context.dataStore.edit { it[KEY_DOWNLOAD_MAX_CONCURRENT] = n } }
 
@@ -53,6 +58,19 @@ class PreferencesManager(private val context: Context) {
 
     val wifiHighDataMode: Flow<Boolean> = context.dataStore.data.map { it[KEY_WIFI_HIGH_DATA] ?: true }
     suspend fun setWifiHighDataMode(e: Boolean) { context.dataStore.edit { it[KEY_WIFI_HIGH_DATA] = e } }
+
+    // ===== Extensions (sources désactivées, persistées par ID) =====
+    val disabledSourceIds: Flow<Set<Long>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DISABLED_SOURCES]?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    }
+
+    suspend fun setSourceDisabled(id: Long, disabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_DISABLED_SOURCES] ?: emptySet()
+            prefs[KEY_DISABLED_SOURCES] =
+                if (disabled) current + id.toString() else current - id.toString()
+        }
+    }
 
     // ===== SAF Storage =====
     suspend fun getSafTreeUri(): String? = context.dataStore.data.first()[KEY_STORAGE_SAF_URI]
@@ -65,14 +83,6 @@ class PreferencesManager(private val context: Context) {
 
     /** Vrai si un emplacement de stockage est configuré (SAF ou interne). */
     suspend fun hasAnyStorage(): Boolean = getSafTreeUri() != null || context.dataStore.data.first()[KEY_INTERNAL_STORAGE_PATH] != null
-
-    fun hasAnyStorageSync(): Boolean {
-        return try { runBlocking { hasAnyStorage() } } catch (e: Exception) { false }
-    }
-
-    fun hasStorageLocationSync(): Boolean {
-        return try { runBlocking { getSafTreeUri() != null } } catch (e: Exception) { false }
-    }
 
     companion object {
         private val KEY_THEME = intPreferencesKey("theme_type")
@@ -87,6 +97,7 @@ class PreferencesManager(private val context: Context) {
         private val KEY_DOWNLOAD_MAX_CONCURRENT = intPreferencesKey("download_max_concurrent")
         private val KEY_DOWNLOAD_ON_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
         private val KEY_WIFI_HIGH_DATA = booleanPreferencesKey("wifi_high_data_mode")
+        private val KEY_DISABLED_SOURCES = stringSetPreferencesKey("disabled_source_ids")
         private val KEY_STORAGE_SAF_URI = stringPreferencesKey("storage_saf_uri")
         private val KEY_INTERNAL_STORAGE_PATH = stringPreferencesKey("internal_storage_path")
     }

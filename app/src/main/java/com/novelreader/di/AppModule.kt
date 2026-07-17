@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.novelreader.data.download.DownloadManager
 import com.novelreader.data.extension.ExtensionManager
+import com.novelreader.data.network.NetworkStateManager
 import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.local.AppDatabase
 import com.novelreader.data.local.dao.CategoryDao
@@ -49,12 +50,16 @@ object AppModule {
         NovelFranceSource(httpClient = client, api = api, parser = parser)
 
     @Provides @Singleton
-    fun provideExtensionManager(novelFranceSource: NovelSource): ExtensionManager =
-        ExtensionManager().apply { registerSource(novelFranceSource) }
+    fun provideExtensionManager(novelFranceSource: NovelSource, prefs: PreferencesManager): ExtensionManager =
+        ExtensionManager(prefs).apply { registerSource(novelFranceSource) }
 
     @Provides @Singleton
-    fun provideDownloadManager(repository: NovelRepository, storageManager: StorageManager, networkManager: com.novelreader.data.network.NetworkStateManager): DownloadManager =
-        DownloadManager(repository, storageManager, networkManager)
+    fun provideDownloadManager(
+        repository: NovelRepository,
+        storageManager: StorageManager,
+        networkManager: NetworkStateManager,
+        prefs: PreferencesManager
+    ): DownloadManager = DownloadManager(repository, storageManager, networkManager, prefs)
 
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
@@ -76,12 +81,8 @@ object AppModule {
     fun providePreferencesManager(@ApplicationContext context: Context): PreferencesManager = PreferencesManager(context)
 
     @Provides @Singleton
-    fun provideNetworkStateManager(@ApplicationContext context: Context): com.novelreader.data.network.NetworkStateManager =
-        com.novelreader.data.network.NetworkStateManager(context)
-
-    @Provides @Singleton
-    fun provideAppUpdateChecker(): com.novelreader.data.update.AppUpdateChecker =
-        com.novelreader.data.update.AppUpdateChecker()
+    fun provideNetworkStateManager(@ApplicationContext context: Context): NetworkStateManager =
+        NetworkStateManager(context)
 
     // ===================== Storage =====================
 

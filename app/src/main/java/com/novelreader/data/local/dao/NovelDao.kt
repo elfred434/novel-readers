@@ -1,11 +1,9 @@
 package com.novelreader.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.novelreader.data.local.entity.NovelEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -21,9 +19,6 @@ interface NovelDao {
     @Query("SELECT * FROM novels ORDER BY addedAt DESC")
     suspend fun getAllNovelsOnce(): List<NovelEntity>
 
-    @Query("SELECT * FROM novels ORDER BY title ASC")
-    fun getAllNovelsAlphabetical(): Flow<List<NovelEntity>>
-
     @Query("SELECT * FROM novels WHERE slug = :slug")
     suspend fun getNovelBySlug(slug: String): NovelEntity?
 
@@ -35,12 +30,6 @@ interface NovelDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNovels(novels: List<NovelEntity>)
-
-    @Update
-    suspend fun updateNovel(novel: NovelEntity)
-
-    @Delete
-    suspend fun deleteNovel(novel: NovelEntity)
 
     @Query("DELETE FROM novels WHERE slug = :slug")
     suspend fun deleteNovelBySlug(slug: String)
