@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.novelreader.data.model.Novel
 import com.novelreader.data.repository.NovelRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,9 +55,12 @@ class BrowseViewModel @Inject constructor(
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
 
     private companion object {
-        const val MAX_SEARCH_PAGES = 50
+        const val MAX_SEARCH_PAGES = 3   // 3 pages de 20 = 60 résultats max
         const val SEARCH_PAGE_SIZE = 20
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
+
+    private var searchJob: Job? = null
 
     init {
         loadNovels()
@@ -144,46 +149,44 @@ class BrowseViewModel @Inject constructor(
         _uiState.update { it.copy(searchQuery = query) }
 
         if (query.isBlank()) {
+            searchJob?.cancel()
             _uiState.update { it.copy(searchResults = null, isSearching = false) }
             return
         }
 
-        performSearch(query.trim())
+        // Debounce : on attend 300 ms après la dernière frappe avant d'interroger
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            performSearch(query.trim())
+        }
     }
 
-    private fun performSearch(query: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, error = null) }
-            val results = mutableListOf<Novel>()
-            val queryLower = query.lowercase()
+    /** Recherche via l'endpoint dédié /api/search (le paramètre search de /api/novels est ignoré par le serveur). */
+    private suspend fun performSearch(query: String) {
+        if (query.isBlank()) return
+        _uiState.update { it.copy(isSearching = true, error = null) }
+        val results = mutableListOf<Novel>()
 
-            try {
-                for (page in 1..MAX_SEARCH_PAGES) {
-                    val novels = repository.browseNovels(page = page)
-
-                    val matches = novels.filter { novel ->
-                        novel.title.lowercase().contains(queryLower) ||
-                        novel.author.lowercase().contains(queryLower)
-                    }
-                    results.addAll(matches)
-
-                    if (novels.size < SEARCH_PAGE_SIZE) break
-                    if (results.size >= 50) break
-                }
-            } catch (e: Exception) {
-                if (results.isEmpty()) {
-                    _uiState.update { it.copy(isSearching = false, error = "Erreur lors de la recherche") }
-                    return@launch
-                }
+        try {
+            for (page in 1..MAX_SEARCH_PAGES) {
+                val novels = repository.searchNovels(query, page)
+                results.addAll(novels)
+                if (novels.size < SEARCH_PAGE_SIZE) break
             }
-
-            _uiState.update {
-                it.copy(
-                    searchResults = results,
-                    isSearching = false,
-                    error = null
-                )
+        } catch (e: Exception) {
+            if (results.isEmpty()) {
+                _uiState.update { it.copy(isSearching = false, error = "Erreur lors de la recherche") }
+                return
             }
+        }
+
+        _uiState.update {
+            it.copy(
+                searchResults = results,
+                isSearching = false,
+                error = null
+            )
         }
     }
 

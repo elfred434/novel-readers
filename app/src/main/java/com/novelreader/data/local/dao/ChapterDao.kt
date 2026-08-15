@@ -33,8 +33,29 @@ interface ChapterDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChapters(chapters: List<ChapterEntity>)
 
+    /**
+     * Insertion qui ignore les conflits : utilisée pour les NOUVEAUX chapitres
+     * afin de ne jamais écraser une ligne existante (REPLACE ferait DELETE+INSERT
+     * et perdrait l'état de lecture / la position de scroll).
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertChaptersIgnore(chapters: List<ChapterEntity>)
+
     @Update
     suspend fun updateChapter(chapter: ChapterEntity)
+
+    @Update
+    suspend fun updateChapters(chapters: List<ChapterEntity>)
+
+    /**
+     * Upsert qui préserve l'état de lecture : insère les nouveaux, met à jour
+     * uniquement les métadonnées (titre, URL, date) des existants.
+     */
+    @androidx.room.Transaction
+    suspend fun upsertChapters(toInsert: List<ChapterEntity>, toUpdate: List<ChapterEntity>) {
+        insertChaptersIgnore(toInsert)
+        updateChapters(toUpdate)
+    }
 
     @Delete
     suspend fun deleteChapter(chapter: ChapterEntity)

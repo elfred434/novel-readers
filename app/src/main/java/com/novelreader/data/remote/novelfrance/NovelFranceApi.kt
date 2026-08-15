@@ -33,17 +33,26 @@ class NovelFranceApi(
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /**
+     * Parcourt le catalogue (/api/novels).
+     *
+     * NB API réelle (vérifiée) :
+     * - Le paramètre `search` de /api/novels est IGNORÉ par le serveur
+     *   (il retourne le catalogue entier) → la recherche passe par
+     *   [searchNovels] (endpoint /api/search dédié).
+     * - Le filtre genre passe par le paramètre `genres` (PLURIEL) ;
+     *   `genre` (singulier) est ignoré.
+     */
     suspend fun getNovels(
         page: Int = 1, limit: Int = 20,
-        search: String? = null, genre: String? = null,
+        genre: String? = null,
         status: String? = null, sort: String? = null,
         order: String? = null, type: String? = null
     ): List<Novel> = withContext(Dispatchers.IO) {
         val url = buildUrl("/api/novels") {
             put("page", page.toString())
             put("limit", limit.coerceIn(1, 50).toString())
-            search?.let { put("search", it) }
-            genre?.let { put("genre", it) }
+            genre?.let { put("genres", it) }   // NB : PLURIEL (singulier ignoré par le serveur)
             status?.let { put("status", it) }
             sort?.let { put("sort", it) }
             order?.let { put("order", it) }
@@ -52,6 +61,21 @@ class NovelFranceApi(
         val response = executeGet(url)
         json.decodeFromString<BrowseResponse>(response).novels.map { it.toDomainModel() }
     }
+
+    /**
+     * Recherche plein-texte — endpoint DÉDIÉ /api/search?q=…
+     * (le paramètre `search` de /api/novels est ignoré par le serveur).
+     */
+    suspend fun searchNovels(query: String, page: Int = 1, limit: Int = 20): List<Novel> =
+        withContext(Dispatchers.IO) {
+            val url = buildUrl("/api/search") {
+                put("q", query)
+                put("page", page.toString())
+                put("limit", limit.coerceIn(1, 50).toString())
+            }
+            val response = executeGet(url)
+            json.decodeFromString<SearchResponse>(response).novels.map { it.toDomainModel() }
+        }
 
     suspend fun getNovelDetail(slug: String): Novel = withContext(Dispatchers.IO) {
         val url = "$BASE_URL/api/novels/$slug"
@@ -122,6 +146,18 @@ class NovelFranceApi(
 
         newChapters
     }
+
+    /**
+     * Contenu complet d'un chapitre via l'API JSON dédiée
+     * GET /api/chapters/{novelSlug}/{chapterSlug}.
+     * Bien plus fiable que le parsing du flux Next.js RSC des pages HTML.
+     */
+    suspend fun getChapterContent(novelSlug: String, chapterSlug: String): com.novelreader.data.model.ChapterContent =
+        withContext(Dispatchers.IO) {
+            val url = "$BASE_URL/api/chapters/$novelSlug/$chapterSlug"
+            val raw = json.decodeFromString<ChapterContentResponse>(executeGet(url))
+            raw.toDomainModel()
+        }
 
     private suspend fun executeGet(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get().build()
@@ -220,6 +256,66 @@ class NovelFranceApi(
             tags = tags?.mapNotNull { it.name } ?: emptyList()
         )
     }
+
+    /** Réponse du endpoint /api/search?q=… */
+    @Serializable
+    data class SearchResponse(
+        val novels: List<ApiNovel>,
+        val total: Int = 0,
+        val hasMore: Boolean = false
+    )
+
+    /** Réponse de /api/chapters/{novelSlug}/{chapterSlug} — contenu complet. */
+    @Serializable
+    data class ChapterContentResponse(
+        val id: String? = null,
+        val chapterNumber: Int? = null,
+        val title: String? = null,
+        val slug: String? = null,
+        val paragraphs: List<ApiParagraph>? = null,
+        val wordCount: Int? = null,
+        val novel: ApiChapterNovel? = null,
+        val prevChapter: ApiPrevNext? = null,
+        val nextChapter: ApiPrevNext? = null
+    ) {
+        fun toDomainModel(): com.novelreader.data.model.ChapterContent =
+            com.novelreader.data.model.ChapterContent(
+                chapterTitle = title ?: "Chapitre ${chapterNumber ?: ""}".trim(),
+                novelTitle = novel?.title ?: "",
+                paragraphs = paragraphs
+                    ?.sortedBy { it.index ?: Int.MAX_VALUE }
+                    ?.mapIndexed { fallback, p ->
+                        com.novelreader.data.model.Paragraph(index = p.index ?: fallback, htmlContent = p.content ?: "")
+                    }
+                    ?: emptyList(),
+                prevChapterUrl = prevChapter?.slug?.let { "$BASE_URL/novel/${novel?.slug}/$it" },
+                nextChapterUrl = nextChapter?.slug?.let { "$BASE_URL/novel/${novel?.slug}/$it" }
+            )
+    }
+
+    @Serializable
+    data class ApiParagraph(
+        val id: String? = null,
+        val index: Int? = null,
+        val content: String? = null,
+        val wordCount: Int? = null
+    )
+
+    @Serializable
+    data class ApiChapterNovel(
+        val id: String? = null,
+        val title: String? = null,
+        val slug: String? = null,
+        val author: String? = null,
+        @SerialName("coverImage") val coverImage: String? = null
+    )
+
+    @Serializable
+    data class ApiPrevNext(
+        val slug: String? = null,
+        val chapterNumber: Int? = null,
+        val title: String? = null
+    )
 
     /** Réponse du endpoint /api/chapters/{slug} */
     @Serializable

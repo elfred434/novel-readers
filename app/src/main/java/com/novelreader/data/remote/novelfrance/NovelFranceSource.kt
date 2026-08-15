@@ -44,8 +44,9 @@ class NovelFranceSource @JvmOverloads constructor(
         }
     }
 
+    /** Recherche plein-texte via l'endpoint dédié /api/search. */
     override suspend fun search(query: String, page: Int): List<Novel> {
-        return api.getNovels(page = page, limit = 20, search = query)
+        return api.searchNovels(query = query, page = page, limit = 20)
     }
 
     override suspend fun getBrowseList(page: Int, genre: String?, status: String?, sort: String?, order: String?): List<Novel> {
@@ -70,8 +71,32 @@ class NovelFranceSource @JvmOverloads constructor(
         return api.getNewChaptersSince(novelSlug, knownChapterNumbers)
     }
 
+    /**
+     * Contenu d'un chapitre via l'API JSON /api/chapters/{novel}/{chapter}.
+     * Fallback : parsing HTML de la page (flux Next.js RSC puis DOM Jsoup).
+     */
     override suspend fun getChapterContent(chapterUrl: String): ChapterContent {
+        val slugs = extractSlugs(chapterUrl)
+        if (slugs != null) {
+            try {
+                return api.getChapterContent(slugs.first, slugs.second)
+            } catch (e: Exception) {
+                // Fallback HTML ci-dessous
+            }
+        }
         return parser.parseChapterContent(fetchHtml(chapterUrl), chapterUrl)
+    }
+
+    /**
+     * Extrait (novelSlug, chapterSlug) d'une URL du type
+     * https://novelfrance.fr/novel/{novelSlug}/{chapterSlug}
+     */
+    private fun extractSlugs(chapterUrl: String): Pair<String, String>? {
+        val match = Regex("/novel/([^/]+)/([^/?#]+)").find(chapterUrl) ?: return null
+        val novelSlug = match.groupValues[1]
+        val chapterSlug = match.groupValues[2]
+        if (novelSlug.isBlank() || chapterSlug.isBlank()) return null
+        return novelSlug to chapterSlug
     }
 
     private suspend fun fetchHtml(url: String): String = withContext(Dispatchers.IO) {

@@ -127,25 +127,59 @@ class NovelRepository @Inject constructor(
      *                (visible dans l'onglet Mises à jour), 0 = chargement initial du novel
      *                (ajout en bibliothèque, non considéré comme une mise à jour).
      */
+    /**
+     * Sauvegarde la liste des chapitres en local (UPSERT).
+     *
+     * - Les NOUVEAUX chapitres sont insérés (avec `addedAt` si fourni).
+     * - Les chapitres EXISTANTS ne voient que leurs métadonnées mises à jour
+     *   (titre, URL, date) : `isRead`, `readAt`, `scrollPosition`, `isDownloaded`
+     *   et `addedAt` sont PRÉSERVÉS (l'historique de lecture n'est plus effacé
+     *   à chaque rafraîchissement).
+     *
+     * @param addedAt timestamp local d'ajout : > 0 signifie « détecté par une mise à jour »
+     *                (visible dans l'onglet Mises à jour), 0 = chargement initial du novel
+     *                (ajout en bibliothèque, non considéré comme une mise à jour).
+     */
     suspend fun cacheChapters(
         novelSlug: String,
         chapters: List<ChapterPreview>,
         novelTitle: String = "",   // Titre lisible pour l'historique
         addedAt: Long = 0
     ) {
-        val entities = chapters.map { preview ->
-            ChapterEntity(
-                id = chapterId(novelSlug, preview.chapterNumber),
-                novelSlug = novelSlug,
-                novelTitle = novelTitle,
-                chapterNumber = preview.chapterNumber,
-                title = preview.title,
-                url = preview.url,
-                publishedAt = preview.publishedAt,
-                addedAt = addedAt
-            )
+        val existing = chapterDao.getChaptersForNovelOnce(novelSlug).associateBy { it.id }
+        val toInsert = mutableListOf<ChapterEntity>()
+        val toUpdate = mutableListOf<ChapterEntity>()
+
+        for (preview in chapters) {
+            val id = chapterId(novelSlug, preview.chapterNumber)
+            val old = existing[id]
+            if (old != null) {
+                // Mise à jour des métadonnées uniquement — état de lecture préservé
+                toUpdate.add(
+                    old.copy(
+                        title = preview.title,
+                        url = preview.url,
+                        publishedAt = preview.publishedAt,
+                        novelTitle = if (novelTitle.isNotBlank()) novelTitle else old.novelTitle
+                    )
+                )
+            } else {
+                toInsert.add(
+                    ChapterEntity(
+                        id = id,
+                        novelSlug = novelSlug,
+                        novelTitle = novelTitle,
+                        chapterNumber = preview.chapterNumber,
+                        title = preview.title,
+                        url = preview.url,
+                        publishedAt = preview.publishedAt,
+                        addedAt = addedAt
+                    )
+                )
+            }
         }
-        chapterDao.insertChapters(entities)
+
+        chapterDao.upsertChapters(toInsert, toUpdate)
     }
 
     /** Marque un chapitre comme lu (et recalcule le badge non-lu si slug fourni). */
