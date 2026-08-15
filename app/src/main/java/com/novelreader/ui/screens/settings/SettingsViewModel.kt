@@ -14,6 +14,8 @@ import com.novelreader.data.repository.NovelRepository
 import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.update.AppUpdateChecker
 import com.novelreader.data.update.AppUpdateInstaller
+import com.novelreader.data.update.UpdateCheckResult
+import com.novelreader.data.update.UpdateInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,11 +44,28 @@ data class SettingsUiState(
     val downloadCountOnDisk: Int = 0,
     val isOnline: Boolean = false,
     val isOnWifi: Boolean = false,
-    val updateAvailable: String? = null,   // null = pas de maj, vide = vérification, version = disponible
-    val updateChangelog: String? = null,
+    val updateState: UpdateState = UpdateState.Idle,
     val isDownloadingUpdate: Boolean = false,
     val currentVersion: String = ""
 )
+
+/** État de la section « Mise à jour » (état explicite, pas de sentinelle String). */
+sealed interface UpdateState {
+    /** Aucune vérification lancée (ex. : après une erreur, avant un retry). */
+    data object Idle : UpdateState
+
+    /** Vérification en cours. */
+    data object Checking : UpdateState
+
+    /** Vérifié : aucune mise à jour. */
+    data object UpToDate : UpdateState
+
+    /** Une mise à jour est disponible. */
+    data class Available(val info: UpdateInfo) : UpdateState
+
+    /** La vérification a échoué (réseau / serveur) ou le téléchargement/installation a échoué. */
+    data class Error(val message: String) : UpdateState
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -107,36 +126,47 @@ class SettingsViewModel @Inject constructor(
 
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateAvailable = "") } // chargement
-            val update = updateChecker.checkForUpdate()
-            if (update != null) {
-                _uiState.update { it.copy(
-                    updateAvailable = update.versionName,
-                    updateChangelog = update.changelog
-                )}
-            } else {
-                _uiState.update { it.copy(updateAvailable = null) }
+            _uiState.update { it.copy(updateState = UpdateState.Checking) }
+            when (val result = updateChecker.checkForUpdate()) {
+                is UpdateCheckResult.Available ->
+                    _uiState.update { it.copy(updateState = UpdateState.Available(result.info)) }
+                is UpdateCheckResult.UpToDate ->
+                    _uiState.update { it.copy(updateState = UpdateState.UpToDate) }
+                is UpdateCheckResult.Error ->
+                    _uiState.update {
+                        it.copy(updateState = UpdateState.Error("Vérification impossible (réseau ou serveur indisponible)."))
+                    }
             }
         }
     }
 
     fun downloadUpdate() {
-        val version = _uiState.value.updateAvailable ?: return
+        // On réutilise l'UpdateInfo déjà récupéré pour l'affichage :
+        // pas de nouvel appel réseau fragile juste avant le téléchargement.
+        val info = (_uiState.value.updateState as? UpdateState.Available)?.info ?: run {
+            _uiState.update { it.copy(updateState = UpdateState.Error("Mise à jour introuvable, relancez la vérification.")) }
+            return
+        }
         _uiState.update { it.copy(isDownloadingUpdate = true) }
 
         viewModelScope.launch {
             try {
-                // Récupérer l'URL depuis le checker
-                val update = updateChecker.checkForUpdate() ?: return@launch
                 val installer = AppUpdateInstaller(app)
                 installer.downloadAndInstall(
-                    apkUrl = update.apkUrl,
+                    apkUrl = info.apkUrl,
                     onComplete = {
                         _uiState.update { it.copy(isDownloadingUpdate = false) }
+                    },
+                    onError = { message ->
+                        _uiState.update {
+                            it.copy(isDownloadingUpdate = false, updateState = UpdateState.Error(message))
+                        }
                     }
                 )
             } catch (e: Exception) {
-                _uiState.update { it.copy(isDownloadingUpdate = false) }
+                _uiState.update {
+                    it.copy(isDownloadingUpdate = false, updateState = UpdateState.Error("Erreur : ${e.message}"))
+                }
             }
         }
     }

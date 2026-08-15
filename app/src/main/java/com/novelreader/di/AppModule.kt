@@ -58,7 +58,9 @@ object AppModule {
 
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME).fallbackToDestructiveMigration().build()
+        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .addMigrations(AppDatabase.MIGRATION_4_5)
+            .fallbackToDestructiveMigration().build()
 
     @Provides @Singleton
     fun provideNovelDao(database: AppDatabase): NovelDao = database.novelDao()

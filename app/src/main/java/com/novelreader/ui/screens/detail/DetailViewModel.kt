@@ -132,6 +132,8 @@ class DetailViewModel @Inject constructor(
             } else {
                 repository.addNovelToLibrary(novel)
                 repository.cacheChapters(slug, _uiState.value.chapters, novel.title)
+                // Badge non-lu : tous les chapitres fraîchement ajoutés sont non lus
+                repository.refreshUnreadCount(slug)
                 _uiState.update { it.copy(isInLibrary = true) }
             }
         }
@@ -161,7 +163,7 @@ class DetailViewModel @Inject constructor(
 
     fun markChapterAsUnread(chapter: ChapterPreview) {
         viewModelScope.launch {
-            repository.markChapterAsUnread(NovelRepository.chapterId(slug, chapter.chapterNumber))
+            repository.markChapterAsUnread(NovelRepository.chapterId(slug, chapter.chapterNumber), slug)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.novelreader.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -33,5 +34,7 @@ data class ChapterEntity(
     val isRead: Boolean = false,    // Marqué comme lu ?
     val readAt: Long? = null,       // Timestamp de lecture
     val isDownloaded: Boolean = false,  // Téléchargé en local ?
-    val scrollPosition: Int = 0     // Position de scroll sauvegardée (en pixels)
+    val scrollPosition: Int = 0,    // Position de scroll sauvegardée (en pixels)
+    @ColumnInfo(defaultValue = "0")
+    val addedAt: Long = 0           // Timestamp local d'ajout (0 = chargement initial, >0 = détecté par une mise à jour)
 )

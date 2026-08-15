@@ -155,7 +155,10 @@ class ReaderViewModel @Inject constructor(
     }
 
     private suspend fun markRead(slug: String, chapterNumber: Int) {
-        try { repository.markChapterAsRead(NovelRepository.chapterId(slug, chapterNumber)); _uiState.update { it.copy(isMarkedRead = true) } } catch (_: Exception) {}
+        try {
+            repository.markChapterAsRead(NovelRepository.chapterId(slug, chapterNumber), slug)
+            _uiState.update { it.copy(isMarkedRead = true) }
+        } catch (_: Exception) {}
     }
 
     fun goToNextChapter() { _uiState.value.chapterContent?.nextChapterUrl?.let { loadChapter(it) } }

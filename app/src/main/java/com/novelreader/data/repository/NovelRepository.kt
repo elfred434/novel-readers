@@ -120,11 +120,18 @@ class NovelRepository @Inject constructor(
         return chapterDao.getChaptersForNovel(novelSlug)
     }
 
-    /** Sauvegarde la liste des chapitres en local. */
+    /**
+     * Sauvegarde la liste des chapitres en local.
+     *
+     * @param addedAt timestamp local d'ajout : > 0 signifie « détecté par une mise à jour »
+     *                (visible dans l'onglet Mises à jour), 0 = chargement initial du novel
+     *                (ajout en bibliothèque, non considéré comme une mise à jour).
+     */
     suspend fun cacheChapters(
         novelSlug: String,
         chapters: List<ChapterPreview>,
-        novelTitle: String = ""  // Titre lisible pour l'historique
+        novelTitle: String = "",   // Titre lisible pour l'historique
+        addedAt: Long = 0
     ) {
         val entities = chapters.map { preview ->
             ChapterEntity(
@@ -134,20 +141,23 @@ class NovelRepository @Inject constructor(
                 chapterNumber = preview.chapterNumber,
                 title = preview.title,
                 url = preview.url,
-                publishedAt = preview.publishedAt
+                publishedAt = preview.publishedAt,
+                addedAt = addedAt
             )
         }
         chapterDao.insertChapters(entities)
     }
 
-    /** Marque un chapitre comme lu. */
-    suspend fun markChapterAsRead(chapterId: String) {
+    /** Marque un chapitre comme lu (et recalcule le badge non-lu si slug fourni). */
+    suspend fun markChapterAsRead(chapterId: String, slug: String? = null) {
         chapterDao.markAsRead(chapterId)
+        slug?.let { refreshUnreadCount(it) }
     }
 
-    /** Marque un chapitre comme non lu. */
-    suspend fun markChapterAsUnread(chapterId: String) {
+    /** Marque un chapitre comme non lu (et recalcule le badge non-lu si slug fourni). */
+    suspend fun markChapterAsUnread(chapterId: String, slug: String? = null) {
         chapterDao.markAsUnread(chapterId)
+        slug?.let { refreshUnreadCount(it) }
     }
 
     /** Sauvegarde la position de scroll pour reprise de lecture. */
@@ -158,6 +168,44 @@ class NovelRepository @Inject constructor(
     /** Historique récent (30 derniers chapitres lus). */
     fun getRecentHistory(): Flow<List<ChapterEntity>> {
         return chapterDao.getRecentHistory(limit = 30)
+    }
+
+    // ===================== Mises à jour des chapitres =====================
+
+    /**
+     * Vérifie si de nouveaux chapitres sont disponibles pour un novel de la
+     * bibliothèque : récupère la liste distante, la compare aux chapitres
+     * locaux, met en cache les nouveaux et recalcule le compteur de non-lus.
+     *
+     * Logique partagée entre le worker périodique et le worker individuel.
+     *
+     * @return la liste des chapitres nouvellement découverts (vide si aucun)
+     */
+    suspend fun updateLibraryNovelChapters(slug: String, novelTitle: String = ""): List<ChapterPreview> {
+        val localNumbers = chapterDao.getChaptersForNovelOnce(slug).map { it.chapterNumber }.toSet()
+        // Requête optimisée (pagination bornée) : 1 appel API en général
+        val newChapters = source.getNewChaptersSince(slug, localNumbers)
+        if (newChapters.isNotEmpty()) {
+            // addedAt > 0 → ces chapitres apparaissent dans l'onglet Mises à jour
+            cacheChapters(slug, newChapters, novelTitle, addedAt = System.currentTimeMillis())
+            refreshUnreadCount(slug)
+        }
+        return newChapters
+    }
+
+    /** Flux réactif des chapitres détectés par les mises à jour (onglet Mises à jour). */
+    fun getLibraryUpdates(limit: Int = 50): Flow<List<ChapterEntity>> {
+        return chapterDao.getLibraryUpdatesFlow(limit)
+    }
+
+    /**
+     * Recalcule le compteur de chapitres non lus d'un novel à partir des
+     * chapitres connus en local (source de vérité unique : la table chapters).
+     * À appeler après un ajout de novel, une lecture, ou une détection de
+     * nouveaux chapitres.
+     */
+    suspend fun refreshUnreadCount(slug: String) {
+        novelDao.updateUnreadCount(slug, chapterDao.getUnreadCount(slug))
     }
 
     // ===================== Cache hors-ligne =====================

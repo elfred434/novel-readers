@@ -37,9 +37,10 @@ class AppUpdateChecker @Inject constructor() {
 
     /**
      * Vérifie si une mise à jour est disponible.
-     * @return UpdateInfo si nouvelle version, null si pas de mise à jour ou erreur
+     * Distingue « à jour », « disponible » et « erreur » (réseau / serveur),
+     * pour que l'UI ne fasse pas passer un échec pour un « à jour ».
      */
-    suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(GITHUB_API)
@@ -47,9 +48,9 @@ class AppUpdateChecker @Inject constructor() {
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext null
+            if (!response.isSuccessful) return@withContext UpdateCheckResult.Error
 
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.body?.string() ?: return@withContext UpdateCheckResult.Error
             val release = json.decodeFromString<GitHubRelease>(body)
 
             val tagVersion = release.tagName.removePrefix("v")
@@ -57,25 +58,29 @@ class AppUpdateChecker @Inject constructor() {
 
             if (compareVersions(tagVersion, currentVersion) > 0) {
                 val apkAsset = release.assets.find { it.name.endsWith(".apk") }
-                if (apkAsset == null) return@withContext null
+                if (apkAsset == null) return@withContext UpdateCheckResult.UpToDate
 
-                UpdateInfo(
-                    versionName = tagVersion,
-                    apkUrl = apkAsset.browserDownloadUrl,
-                    changelog = release.body ?: "Mise à jour disponible",
-                    publishedAt = release.publishedAt ?: ""
+                UpdateCheckResult.Available(
+                    UpdateInfo(
+                        versionName = tagVersion,
+                        apkUrl = apkAsset.browserDownloadUrl,
+                        changelog = release.body ?: "Mise à jour disponible",
+                        publishedAt = release.publishedAt ?: ""
+                    )
                 )
-            } else null
+            } else {
+                UpdateCheckResult.UpToDate
+            }
         } catch (e: Exception) {
             android.util.Log.w("AppUpdateChecker", "Erreur vérification update", e)
-            null
+            UpdateCheckResult.Error
         }
     }
 
     /** Compare deux versions sémantiques "1.0.42" > "1.0.5" => positif */
     private fun compareVersions(v1: String, v2: String): Int {
-        val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
-        val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+        val parts1 = normalizeVersion(v1)
+        val parts2 = normalizeVersion(v2)
         val maxLen = maxOf(parts1.size, parts2.size)
         for (i in 0 until maxLen) {
             val a = parts1.getOrElse(i) { 0 }
@@ -85,6 +90,13 @@ class AppUpdateChecker @Inject constructor() {
         }
         return 0
     }
+
+    /**
+     * "1.0.5" / "1.0.5-debug" / "1.0.5-beta1" → [1, 0, 5]
+     * Ignore les suffixes (debug, beta, rc…) pour ne pas casser la comparaison.
+     */
+    private fun normalizeVersion(v: String): List<Int> =
+        v.split(".").map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
 
     @Serializable
     data class GitHubRelease(
@@ -101,6 +113,18 @@ class AppUpdateChecker @Inject constructor() {
         val url: String = "",
         @SerialName("browser_download_url") val browserDownloadUrl: String = ""
     )
+}
+
+/** Résultat d'une vérification de mise à jour. */
+sealed class UpdateCheckResult {
+    /** Une nouvelle version est disponible et téléchargeable. */
+    data class Available(val info: UpdateInfo) : UpdateCheckResult()
+
+    /** L'app est à jour (ou la release n'a pas d'APK). */
+    data object UpToDate : UpdateCheckResult()
+
+    /** Erreur réseau / serveur / parsing : impossible de vérifier. */
+    data object Error : UpdateCheckResult()
 }
 
 data class UpdateInfo(

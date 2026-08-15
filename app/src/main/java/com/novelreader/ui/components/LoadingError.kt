@@ -87,9 +87,10 @@ fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifie
 
 /**
  * Vue vide professionnelle.
+ * @param action contenu optionnel affiché sous le message (ex. bouton d'action).
  */
 @Composable
-fun EmptyView(message: String, modifier: Modifier = Modifier) {
+fun EmptyView(message: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
     Column(
         modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -115,6 +116,10 @@ fun EmptyView(message: String, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        if (action != null) {
+            Spacer(Modifier.height(20.dp))
+            action()
+        }
     }
 }
 

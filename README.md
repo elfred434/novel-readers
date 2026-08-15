@@ -36,6 +36,19 @@ cd NovelReader
 # APK généré dans app/build/outputs/apk/release/
 ```
 
+> ⚠️ **Mise à jour intégrée** : pour que l'app puisse se mettre à jour depuis
+> l'App Store, **toutes les releases doivent être signées avec la même clé**.
+> Configure le secret GitHub `KEYSTORE_BASE64` (keystore encodé en base64) :
+> ```bash
+> keytool -genkey -v -keystore novelreader.keystore -alias novelreader \
+>   -keyalg RSA -keysize 2048 -validity 10000 -storepass <mdp> -keypass <mdp> \
+>   -dname "CN=NovelReader, OU=Dev, O=NovelReader, L=City, ST=State, C=FR"
+> base64 -w 0 novelreader.keystore   # → coller dans le secret KEYSTORE_BASE64
+> ```
+> Secrets optionnels : `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
+> (défaut : `novelreader`). Sans `KEYSTORE_BASE64`, les APK de test CI sont
+> signés avec une clé jetable et ne peuvent pas être installés par-dessus une release.
+
 ## 📁 Structure du projet
 
 ```

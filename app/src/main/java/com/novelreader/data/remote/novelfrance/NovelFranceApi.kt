@@ -26,6 +26,9 @@ class NovelFranceApi(
     companion object {
         private const val BASE_URL = "https://novelfrance.fr"
         private const val CHAPTERS_PAGE_SIZE = 100
+
+        /** Garde-fou anti-boucle : 10 pages de 100 = 1000 chapitres max par novel. */
+        private const val CHAPTERS_MAX_TOTAL = 1000
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -68,27 +71,56 @@ class NovelFranceApi(
             val response = executeGet(url)
             val page = json.decodeFromString<ChaptersResponse>(response)
 
-            page.chapters.forEach { raw ->
-                allChapters.add(
-                    ChapterPreview(
-                        id = raw.id ?: "${slug}_${raw.chapterNumber}",
-                        novelSlug = slug,
-                        chapterNumber = raw.chapterNumber,
-                        title = raw.title ?: "Chapitre ${raw.chapterNumber}",
-                        url = "$BASE_URL/novel/$slug/${raw.slug ?: "chapter-${raw.chapterNumber}"}",
-                        publishedAt = raw.createdAt,
-                        wordCount = raw.wordCount
-                    )
-                )
-            }
+            page.chapters.forEach { raw -> allChapters.add(raw.toPreview(slug)) }
 
-            hasMore = page.hasMore
+            hasMore = page.hasMore && page.chapters.isNotEmpty()
             skip += CHAPTERS_PAGE_SIZE
-
-            if (page.chapters.isEmpty()) hasMore = false
+            if (skip > CHAPTERS_MAX_TOTAL) hasMore = false // garde-fou : 10 pages max
         }
 
         allChapters.reversed()
+    }
+
+    /**
+     * Derniers chapitres publiés sur le site (endpoint réel : /api/chapters/latest).
+     * Riche : titre réel du chapitre + infos du novel (titre, couverture, note).
+     * Pagination par skip/take (défaut serveur : 20).
+     */
+    suspend fun getLatestChapters(skip: Int = 0, take: Int = 20): List<ChapterPreview> = withContext(Dispatchers.IO) {
+        val url = "$BASE_URL/api/chapters/latest?skip=${skip.coerceAtLeast(0)}&take=${take.coerceIn(1, 100)}"
+        val response = executeGet(url)
+        json.decodeFromString<LatestChaptersResponse>(response).data.map { it.toPreview() }
+    }
+
+    /**
+     * Récupère uniquement les chapitres plus récents que ceux déjà connus.
+     * Optimisation : on parcourt l'API par pages décroissantes et on s'arrête
+     * dès qu'on atteint le plus haut numéro local connu → 1 seul appel dans
+     * la grande majorité des cas (au lieu de télécharger TOUS les chapitres).
+     */
+    suspend fun getNewChaptersSince(slug: String, knownNumbers: Set<Int>): List<ChapterPreview> = withContext(Dispatchers.IO) {
+        if (knownNumbers.isEmpty()) return@withContext getChaptersPaginated(slug)
+
+        val maxKnown = knownNumbers.maxOrNull() ?: 0
+        val newChapters = mutableListOf<ChapterPreview>()
+        var skip = 0
+        var done = false
+
+        while (!done) {
+            val url = "$BASE_URL/api/chapters/$slug?skip=$skip&take=$CHAPTERS_PAGE_SIZE&order=desc"
+            val page = json.decodeFromString<ChaptersResponse>(executeGet(url))
+
+            for (raw in page.chapters) {
+                if (raw.chapterNumber <= maxKnown) { done = true; break }
+                newChapters.add(raw.toPreview(slug))
+            }
+
+            if (page.chapters.isEmpty() || !page.hasMore || done) break
+            skip += CHAPTERS_PAGE_SIZE
+            if (skip > CHAPTERS_MAX_TOTAL) break // garde-fou
+        }
+
+        newChapters
     }
 
     private suspend fun executeGet(url: String): String = withContext(Dispatchers.IO) {
@@ -207,5 +239,61 @@ class NovelFranceApi(
         val slug: String? = null,
         val createdAt: String? = null,
         val wordCount: Int? = null
+    ) {
+        fun toPreview(novelSlug: String): ChapterPreview = ChapterPreview(
+            id = id ?: "${novelSlug}_$chapterNumber",
+            novelSlug = novelSlug,
+            chapterNumber = chapterNumber,
+            title = title ?: "Chapitre $chapterNumber",
+            url = "$BASE_URL/novel/$novelSlug/${slug ?: "chapter-$chapterNumber"}",
+            publishedAt = createdAt,
+            wordCount = wordCount
+        )
+    }
+
+    /** Réponse du endpoint /api/chapters/latest (derniers chapitres publiés). */
+    @Serializable
+    data class LatestChaptersResponse(
+        val data: List<ApiLatestChapter>,
+        val total: Int? = null,
+        val skip: Int? = null,
+        val take: Int? = null,
+        val hasMore: Boolean = false
+    )
+
+    @Serializable
+    data class ApiLatestChapter(
+        val id: String? = null,
+        val novelId: String? = null,
+        val chapterNumber: Int,
+        val title: String? = null,
+        val slug: String? = null,
+        val createdAt: String? = null,
+        val novel: ApiLatestNovel? = null
+    ) {
+        fun toPreview(): ChapterPreview {
+            val novelSlug = novel?.slug ?: ""
+            val chapterSlug = slug ?: "chapter-$chapterNumber"
+            return ChapterPreview(
+                id = id ?: "${novelSlug}_$chapterNumber",
+                novelSlug = novelSlug,
+                chapterNumber = chapterNumber,
+                title = title ?: "Chapitre $chapterNumber",
+                url = "$BASE_URL/novel/$novelSlug/$chapterSlug",
+                publishedAt = createdAt,
+                novelTitle = novel?.title,
+                novelCoverUrl = novel?.coverImage?.let { "$BASE_URL$it" }
+            )
+        }
+    }
+
+    @Serializable
+    data class ApiLatestNovel(
+        val id: String? = null,
+        val title: String? = null,
+        val slug: String? = null,
+        val coverImage: String? = null,
+        val author: String? = null,
+        val rating: Double? = null
     )
 }

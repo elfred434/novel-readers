@@ -49,6 +49,16 @@ interface NovelSource {
     /** Liste des chapitres d'un novel */
     suspend fun getChapterList(novelSlug: String): List<ChapterPreview>
 
+    /**
+     * Récupère uniquement les chapitres publiés après ceux déjà connus localement.
+     * Implémentation par défaut : liste complète puis filtre (correct mais coûteux).
+     * Les sources peuvent surcharger avec une requête optimisée (pagination bornée).
+     */
+    suspend fun getNewChaptersSince(novelSlug: String, knownChapterNumbers: Set<Int>): List<ChapterPreview> {
+        if (knownChapterNumbers.isEmpty()) return getChapterList(novelSlug)
+        return getChapterList(novelSlug).filter { it.chapterNumber !in knownChapterNumbers }
+    }
+
     /** Contenu texte d'un chapitre */
     suspend fun getChapterContent(chapterUrl: String): ChapterContent
 

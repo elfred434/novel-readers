@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Nécessaire pour lancer l'installeur d'APK (Android 8+) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".NovelReaderApp"
@@ -43,6 +45,20 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!--
+            Receiver déclaré (statique) pour la mise à jour : installe l'APK même
+            si le process de l'app a été tué pendant le téléchargement.
+            Le garde-fou anti-broadcasts forgés est le test de l'ID de téléchargement
+            persistant (voir ApkDownloadReceiver / AppUpdateInstaller).
+        -->
+        <receiver
+            android:name=".data.update.ApkDownloadReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
 
         <!-- Désactive l'initialiseur WorkManager par défaut -->
         <provider

@@ -44,19 +44,44 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Generate keystore for signing
+      # IMPORTANT : la mise à jour intégrée ne fonctionne QUE si toutes les
+      # releases sont signées avec la MÊME clé (Android refuse d'installer
+      # par-dessus une app dont la signature diffère).
+      #
+      # À configurer une seule fois dans les secrets du repo :
+      #   KEYSTORE_BASE64 = keystore encodé en base64
+      #   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD (optionnels, défaut "novelreader")
+      #
+      # Génération initiale du keystore (localement, à garder précieusement) :
+      #   keytool -genkey -v -keystore novelreader.keystore -alias novelreader \
+      #     -keyalg RSA -keysize 2048 -validity 10000 -storepass <mdp> -keypass <mdp> \
+      #     -dname "CN=NovelReader, OU=Dev, O=NovelReader, L=City, ST=State, C=FR"
+      #   base64 -w 0 novelreader.keystore   # → copier la sortie dans le secret
+      - name: Set up keystore (persisted or throwaway)
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          keytool -genkey -v -keystore novelreader.keystore \
-            -alias novelreader -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass novelreader -keypass novelreader \
-            -dname "CN=NovelReader, OU=Dev, O=NovelReader, L=City, ST=State, C=FR"
+          if [ -n "${KEYSTORE_BASE64}" ]; then
+            echo "${KEYSTORE_BASE64}" | base64 -d > novelreader.keystore
+            echo "::notice::Keystore persistant chargé depuis les secrets GitHub"
+          else
+            echo "::warning::Secret KEYSTORE_BASE64 absent : keystore jetable généré. Cet APK ne pourra PAS être installé par-dessus une release existante."
+            keytool -genkey -v -keystore novelreader.keystore \
+              -alias "${KEY_ALIAS:-novelreader}" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "${KEYSTORE_PASSWORD:-novelreader}" -keypass "${KEY_PASSWORD:-novelreader}" \
+              -dname "CN=NovelReader, OU=Dev, O=NovelReader, L=City, ST=State, C=FR"
+          fi
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_PASSWORD: novelreader
-          KEY_ALIAS: novelreader
-          KEY_PASSWORD: novelreader
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'novelreader' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'novelreader' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'novelreader' }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
       - name: Build Debug APK

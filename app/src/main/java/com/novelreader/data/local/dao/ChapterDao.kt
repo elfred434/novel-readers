@@ -65,4 +65,19 @@ interface ChapterDao {
 
     @Query("SELECT COUNT(*) FROM chapters WHERE novelSlug = :novelSlug AND isRead = 0")
     suspend fun getUnreadCount(novelSlug: String): Int
+
+    /**
+     * Chapitres détectés par les mises à jour (addedAt > 0), pour tous les novels
+     * de la bibliothèque. Flux réactif : se met à jour quand les workers insèrent
+     * de nouveaux chapitres.
+     */
+    @Query("SELECT * FROM chapters WHERE addedAt > 0 ORDER BY addedAt DESC LIMIT :limit")
+    fun getLibraryUpdatesFlow(limit: Int = 50): Flow<List<ChapterEntity>>
+
+    @Query("SELECT * FROM chapters WHERE addedAt > 0 ORDER BY addedAt DESC LIMIT :limit")
+    suspend fun getLibraryUpdatesOnce(limit: Int = 50): List<ChapterEntity>
+
+    /** Nombre total de chapitres marqués comme mises à jour (badge éventuel). */
+    @Query("SELECT COUNT(*) FROM chapters WHERE addedAt > 0")
+    suspend fun getLibraryUpdatesCount(): Int
 }

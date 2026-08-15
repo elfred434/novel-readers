@@ -8,13 +8,16 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.novelreader.data.download.DownloadService
+import com.novelreader.data.local.preferences.PreferencesManager
 import com.novelreader.data.storage.StorageManager
 import com.novelreader.data.update.AppUpdateChecker
+import com.novelreader.data.update.UpdateCheckResult
 import com.novelreader.data.worker.UpdateWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,6 +36,9 @@ class NovelReaderApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var updateChecker: AppUpdateChecker
+
+    @Inject
+    lateinit var preferencesManager: PreferencesManager
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -55,12 +61,13 @@ class NovelReaderApp : Application(), Configuration.Provider {
      */
     private fun checkAppUpdate() {
         scope.launch {
-            try {
-                val update = updateChecker.checkForUpdate()
-                if (update != null) {
-                    android.util.Log.i("NovelReader", "Mise à jour v${update.versionName} disponible")
-                }
-            } catch (_: Exception) {}
+            when (val result = updateChecker.checkForUpdate()) {
+                is UpdateCheckResult.Available ->
+                    android.util.Log.i("NovelReader", "Mise à jour v${result.info.versionName} disponible")
+                is UpdateCheckResult.UpToDate -> { /* à jour */ }
+                is UpdateCheckResult.Error ->
+                    android.util.Log.w("NovelReader", "Vérification de mise à jour impossible")
+            }
         }
     }
 
@@ -110,7 +117,11 @@ class NovelReaderApp : Application(), Configuration.Provider {
     }
 
     private fun scheduleUpdates() {
-        val workManager = WorkManager.getInstance(this)
-        UpdateWorker.schedule(workManager, intervalHours = 12)
+        scope.launch {
+            // L'intervalle configuré dans les Paramètres est réellement appliqué
+            val interval = preferencesManager.updateIntervalHours.first().coerceIn(4, 48).toLong()
+            val workManager = WorkManager.getInstance(this@NovelReaderApp)
+            UpdateWorker.schedule(workManager, intervalHours = interval)
+        }
     }
 }

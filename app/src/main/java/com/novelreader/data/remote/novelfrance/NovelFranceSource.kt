@@ -32,8 +32,16 @@ class NovelFranceSource @JvmOverloads constructor(
     override val supportsLatest: Boolean = true
 
     override suspend fun getLatestUpdates(page: Int): List<ChapterPreview> {
-        val url = if (page <= 1) "$baseUrl/latest" else "$baseUrl/latest?page=$page"
-        return parser.parseLatestUpdates(fetchHtml(url))
+        // API propre (/api/chapters/latest) : titres réels + infos du novel.
+        // Plus robuste que le parsing HTML de /latest.
+        return try {
+            val skip = (page - 1).coerceAtLeast(0) * 20
+            api.getLatestChapters(skip = skip, take = 20)
+        } catch (e: Exception) {
+            // Fallback : parsing HTML de /latest (dernier recours)
+            val url = if (page <= 1) "$baseUrl/latest" else "$baseUrl/latest?page=$page"
+            parser.parseLatestUpdates(fetchHtml(url))
+        }
     }
 
     override suspend fun search(query: String, page: Int): List<Novel> {
@@ -55,6 +63,11 @@ class NovelFranceSource @JvmOverloads constructor(
      */
     override suspend fun getChapterList(novelSlug: String): List<ChapterPreview> {
         return api.getChaptersPaginated(novelSlug)
+    }
+
+    /** Optimisé : s'arrête dès que les chapitres connus sont atteints (1 appel en général). */
+    override suspend fun getNewChaptersSince(novelSlug: String, knownChapterNumbers: Set<Int>): List<ChapterPreview> {
+        return api.getNewChaptersSince(novelSlug, knownChapterNumbers)
     }
 
     override suspend fun getChapterContent(chapterUrl: String): ChapterContent {

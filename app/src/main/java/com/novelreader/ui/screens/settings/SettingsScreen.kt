@@ -280,43 +280,65 @@ fun SettingsScreen(
                         Column(Modifier.weight(1f)) {
                             Text("Mise à jour", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
 
-                            when {
-                                uiState.updateAvailable == "" ->
+                            when (val state = uiState.updateState) {
+                                is UpdateState.Checking ->
                                     Text("Vérification…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                uiState.updateAvailable != null && uiState.updateAvailable!!.isNotEmpty() && !uiState.isDownloadingUpdate ->
-                                    Text("v${uiState.updateAvailable} disponible", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                uiState.isDownloadingUpdate ->
-                                    Text("Téléchargement…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                else ->
+                                is UpdateState.UpToDate ->
                                     Text("À jour", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                is UpdateState.Error ->
+                                    Text("Vérification impossible", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                is UpdateState.Available ->
+                                    Text("v${state.info.versionName} disponible", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                is UpdateState.Idle -> {}
+                            }
+                            if (uiState.isDownloadingUpdate) {
+                                Text("Téléchargement…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
 
-                    if (uiState.updateAvailable != null && uiState.updateAvailable!!.isNotEmpty()) {
-                        if (uiState.updateChangelog != null && uiState.updateChangelog!!.isNotBlank()) {
+                    when (val state = uiState.updateState) {
+                        is UpdateState.Available -> {
+                            if (state.info.changelog.isNotBlank()) {
+                                Text(
+                                    state.info.changelog.take(200).replace(Regex("(?m)^#+\\s*"), "").lines().take(5).joinToString("\n").trim(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 5
+                                )
+                            }
+                            Button(
+                                onClick = viewModel::downloadUpdate,
+                                enabled = !uiState.isDownloadingUpdate,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Download, null, modifier = Modifier.padding(end = 6.dp))
+                                Text(if (uiState.isDownloadingUpdate) "Téléchargement…" else "Télécharger v${state.info.versionName}")
+                            }
+                        }
+                        is UpdateState.Error -> {
                             Text(
-                                uiState.updateChangelog!!.take(200).replace(Regex("(?m)^#+\\s*"), "").lines().take(5).joinToString("\n").trim(),
+                                state.message,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 5
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 3
                             )
+                            TextButton(onClick = viewModel::checkForUpdate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Réessayer", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
-                        Button(
-                            onClick = viewModel::downloadUpdate,
-                            enabled = !uiState.isDownloadingUpdate,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Default.Download, null, modifier = Modifier.padding(end = 6.dp))
-                            Text(if (uiState.isDownloadingUpdate) "Téléchargement…" else "Télécharger v${uiState.updateAvailable}")
+                        is UpdateState.UpToDate -> {
+                            TextButton(onClick = viewModel::checkForUpdate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Vérifier les mises à jour", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
-                    } else if (uiState.updateAvailable == null) {
-                        TextButton(onClick = viewModel::checkForUpdate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Vérifier les mises à jour", style = MaterialTheme.typography.labelMedium)
-                        }
+                        is UpdateState.Checking -> {}
+                        is UpdateState.Idle -> {}
                     }
                 }
             }

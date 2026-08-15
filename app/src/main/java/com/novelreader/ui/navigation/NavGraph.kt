@@ -12,6 +12,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,10 +35,23 @@ import com.novelreader.ui.screens.settings.SettingsScreen
 import com.novelreader.ui.screens.updates.UpdatesScreen
 
 @Composable
-fun NovelReaderNavigation() {
+fun NovelReaderNavigation(
+    deepLinkSlug: String? = null,
+    onDeepLinkConsumed: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    // Deep link depuis une notification « nouveaux chapitres » :
+    // navigue vers le détail du novel dès la première composition.
+    LaunchedEffect(deepLinkSlug) {
+        val slug = deepLinkSlug ?: return@LaunchedEffect
+        navController.navigate(Screen.Detail.createRoute(slug)) {
+            launchSingleTop = true
+        }
+        onDeepLinkConsumed()
+    }
 
     val bottomBarRoutes = Screen.bottomNavItems.map { it.route }
     val showBottomBar = currentDestination?.route in bottomBarRoutes
