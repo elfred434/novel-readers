@@ -42,3 +42,6 @@ keystore.properties
 *.swo
 *~
 ~$*.doc*
+
+# Secrets locaux
+*.b64
